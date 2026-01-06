@@ -9,8 +9,6 @@ const client = new ApifyClient({ token: process.env.APIFY_API_TOKEN });
 app.use(cors());
 app.use(express.json());
 
-// Store proxy results in memory (Map) - key: token, value: result
-const proxyResults = new Map();
 
 // Serve static frontend
 app.use(express.static('public'));
@@ -41,27 +39,27 @@ app.post('/v1/proxy', async (req, res) => {
 
         // Generate token and store result
         const token = nanoid(10);
-        proxyResults.set(token, {
+const resultWithMeta = {
             ...result,
             timestamp: Date.now(),
             expiresAt: Date.now() + (24 * 60 * 60 * 1000) // 24 hours
-        });
-
-        // Clean up expired results
-        for (const [key, value] of proxyResults.entries()) {
-            if (Date.now() > value.expiresAt) {
-                proxyResults.delete(key);
-            }
-        }
-
+        };
+        
+        // Store in Apify KV store (persists across serverless invocations)
+        await client.keyValueStore(run.defaultKeyValueStoreId).setRecord({
+            key: `proxy_${token}`,
+            value: resultWithMeta,
+            contentType: 'application/json'
+        
         const viewUrl = `${req.protocol}://${req.get('host')}/v1/proxy/${token}`;
-
+        
         res.json({
             requestId: run.id,
             token,
             viewUrl,
             viaProxy: true,
-            status: result.status
+            status: result.status,
+            kvStoreId: run.defaultKeyValueStoreId
         });
 
     } catch (error) {
@@ -73,17 +71,32 @@ app.post('/v1/proxy', async (req, res) => {
 // GET /v1/proxy/:token - View proxied content
 app.get('/v1/proxy/:token', (req, res) => {
     const { token } = req.params;
-    const result = proxyResults.get(token);
-
+        
+        // Try to get from Apify KV store
+        // We need to search across recent runs' KV stores
+        const actorRuns = await client.actor('integrative_operative/my-actor').runs().list({ limit: 10 });
+        
+        let result = null;
+        for (const run of actorRuns.items) {
+            try {
+                const record = await client.keyValueStore(run.defaultKeyValueStoreId).getRecord(`proxy_${token}`);
+                if (record) {
+                    result = record.value;
+                    break;
+                }
+            } catch (e) {
+                // KV store doesn't have this token, continue
+                continue;
+            }
+        }
     if (!result) {
         return res.status(404).json({ error: 'Proxy result not found or expired' });
     }
 
     // Check if expired
     if (Date.now() > result.expiresAt) {
-        proxyResults.delete(token);
-        return res.status(404).json({ error: 'Proxy result expired' });
-    }
+    }return res.status(404).json({ error: 'Proxy result expired' });
+        
 
     // Serve HTML with basic URL rewriting for resources
     let html = result.body;
@@ -108,3 +121,4 @@ app.listen(PORT, () => {
 });
 
 export default app;
+
