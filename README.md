@@ -2,8 +2,8 @@
 
 > **Privacy-focused HTTP proxy API powered by Nym mixnet**
 
-[![Live API](https://img.shields.io/badge/API-Live-success)](https://nym-proxy.vercel.app)
-[![Status](https://img.shields.io/badge/Status-Beta-orange)](https://nym-proxy.vercel.app/v1/health)
+[![Live API](https://img.shields.io/badge/API-Live-success)](https://nym-proxy-backend.vercel.app)
+[![Status](https://img.shields.io/badge/Status-Beta-orange)](https://nym-proxy-backend.vercel.app/v1/health)
 
 ## 🚀 Quick Start
 
@@ -11,7 +11,7 @@ Make anonymous HTTP requests through the Nym mixnet in one line:
 
 ### PowerShell (Windows)
 ```powershell
-Invoke-RestMethod https://nym-proxy.vercel.app/v1/proxy `
+Invoke-RestMethod https://nym-proxy-backend.vercel.app/v1/proxy `
   -Method POST `
   -Headers @{"Authorization"="Bearer test_key_123"} `
   -Body '{"url":"https://httpbin.org/ip"}' `
@@ -20,7 +20,7 @@ Invoke-RestMethod https://nym-proxy.vercel.app/v1/proxy `
 
 ### Curl (Linux/Mac)
 ```bash
-curl -X POST https://nym-proxy.vercel.app/v1/proxy \
+curl -X POST https://nym-proxy-backend.vercel.app/v1/proxy \
   -H "Authorization: Bearer test_key_123" \
   -H "Content-Type: application/json" \
   -d '{"url":"https://httpbin.org/ip"}'
@@ -28,7 +28,7 @@ curl -X POST https://nym-proxy.vercel.app/v1/proxy \
 
 ### JavaScript
 ```javascript
-fetch('https://nym-proxy.vercel.app/v1/proxy', {
+fetch('https://nym-proxy-backend.vercel.app/v1/proxy', {
   method: 'POST',
   headers: {
     'Authorization': 'Bearer test_key_123',
@@ -45,7 +45,7 @@ fetch('https://nym-proxy.vercel.app/v1/proxy', {
 import requests
 
 response = requests.post(
-    'https://nym-proxy.vercel.app/v1/proxy',
+    'https://nym-proxy-backend.vercel.app/v1/proxy',
     headers={'Authorization': 'Bearer test_key_123'},
     json={'url': 'https://httpbin.org/ip'}
 )
@@ -56,7 +56,7 @@ print(response.json())
 
 ### Base URL
 ```
-https://nym-proxy.vercel.app
+https://nym-proxy-backend.vercel.app
 ```
 
 ### Endpoints
@@ -175,7 +175,7 @@ ISC License - See LICENSE file for details
 
 ## 🔗 Links
 
-- **Live API**: https://nym-proxy.vercel.app
+- **Live API**: https://nym-proxy-backend.vercel.app
 - **GitHub**: https://github.com/BikramBiswas786/nym-proxy-mvp
 - **Nym Network**: https://nymtech.net
 
