@@ -1,3 +1,4 @@
+// v1 health endpoint
 export default function handler(req, res) {
   res.status(200).json({ status: "ok", uptime: process.uptime() });
 }
