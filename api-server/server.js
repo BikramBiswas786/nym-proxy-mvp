@@ -275,7 +275,6 @@ if (u) document.getElementById('urlInput').value = decodeURIComponent(u);
 </html>
   `);
 });
-});
 app.get('/v1/health', (req, res) => {
   res.json({ status: 'ok' });
 });
@@ -292,3 +291,4 @@ app.listen(PORT, () => {
 
 
 // Force redeploy - Beautiful UI live
+
