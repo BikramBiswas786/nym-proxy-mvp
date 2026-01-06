@@ -6,14 +6,14 @@ import cors from 'cors';
 const app = express();
 const client = new ApifyClient({ token: process.env.APIFY_API_TOKEN });
 
-// Use a dedicated shared KV store for all proxy results
-const PROXY_STORE_NAME = 'nym-proxy-results';
-
 app.use(cors());
 app.use(express.json());
 
 // Serve static frontend
 app.use(express.static('public'));
+
+// In-memory store for KV store IDs (for serverless, could use a persistent DB)
+const tokenToKvStore = new Map();
 
 // POST /v1/proxy - Create private proxy link
 app.post('/v1/proxy', async (req, res) => {
@@ -47,12 +47,15 @@ app.post('/v1/proxy', async (req, res) => {
       expiresAt: Date.now() + (24 * 60 * 60 * 1000) // 24 hours
     };
 
-    // Store in a dedicated shared KV store
-    await client.keyValueStore(PROXY_STORE_NAME).setRecord({
+    // Store in the run's default KV store
+    await client.keyValueStore(run.defaultKeyValueStoreId).setRecord({
       key: `proxy_${token}`,
       value: resultWithMeta,
       contentType: 'application/json'
     });
+
+    // Store mapping in memory
+    tokenToKvStore.set(token, run.defaultKeyValueStoreId);
 
     const viewUrl = `${req.protocol}://${req.get('host')}/v1/proxy/${token}`;
 
@@ -61,7 +64,8 @@ app.post('/v1/proxy', async (req, res) => {
       token,
       viewUrl,
       viaProxy: true,
-      status: result.status
+      status: result.status,
+      kvStoreId: run.defaultKeyValueStoreId
     });
 
   } catch (error) {
@@ -75,8 +79,33 @@ app.get('/v1/proxy/:token', async (req, res) => {
   try {
     const { token } = req.params;
 
-    // Get from the dedicated shared KV store
-    const record = await client.keyValueStore(PROXY_STORE_NAME).getRecord(`proxy_${token}`);
+    // Try to get KV store ID from memory first
+    let kvStoreId = tokenToKvStore.get(token);
+
+    // If not in memory, search recent runs
+    if (!kvStoreId) {
+      const actorRuns = await client.actor('integrative_operative/my-actor').runs().list({ limit: 10 });
+      
+      for (const run of actorRuns.items) {
+        try {
+          const record = await client.keyValueStore(run.defaultKeyValueStoreId).getRecord(`proxy_${token}`);
+          if (record && record.value) {
+            kvStoreId = run.defaultKeyValueStoreId;
+            tokenToKvStore.set(token, kvStoreId);
+            break;
+          }
+        } catch (e) {
+          continue;
+        }
+      }
+    }
+
+    if (!kvStoreId) {
+      return res.status(404).json({ error: 'Proxy result not found or expired' });
+    }
+
+    // Get from the specific KV store
+    const record = await client.keyValueStore(kvStoreId).getRecord(`proxy_${token}`);
 
     if (!record || !record.value) {
       return res.status(404).json({ error: 'Proxy result not found or expired' });
