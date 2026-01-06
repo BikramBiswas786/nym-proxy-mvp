@@ -70,50 +70,56 @@ app.post('/v1/proxy', async (req, res) => {
 
 // GET /v1/proxy/:token - View proxied content
 app.get('/v1/proxy/:token', async (req, res) => {
-  const { token } = req.params;
+  try {
+    const { token } = req.params;
 
-  // Try to get from Apify KV store
-  // We need to search across recent runs' KV stores
-  const actorRuns = await client.actor('integrative_operative/my-actor').runs().list({ limit: 10 });
+    // Try to get from Apify KV store
+    // We need to search across recent runs' KV stores
+    const actorRuns = await client.actor('integrative_operative/my-actor').runs().list({ limit: 10 });
 
-  let result = null;
-  for (const run of actorRuns.items) {
-    try {
-      const record = await client.keyValueStore(run.defaultKeyValueStoreId).getRecord(`proxy_${token}`);
-      if (record) {
-        result = record.value;
-        break;
+    let result = null;
+    for (const run of actorRuns.items) {
+      try {
+        const record = await client.keyValueStore(run.defaultKeyValueStoreId).getRecord(`proxy_${token}`);
+        if (record) {
+          result = record.value;
+          break;
+        }
+      } catch (e) {
+        // KV store doesn't have this token, continue
+        continue;
       }
-    } catch (e) {
-      // KV store doesn't have this token, continue
-      continue;
     }
+
+    if (!result) {
+      return res.status(404).json({ error: 'Proxy result not found or expired' });
+    }
+
+    // Check if expired
+    if (Date.now() > result.expiresAt) {
+      return res.status(404).json({ error: 'Proxy result expired' });
+    }
+
+    // Serve HTML with basic URL rewriting for resources
+    let html = result.body;
+
+    // Basic URL rewriting for common relative URLs
+    const originalUrl = new URL(result.originalUrl);
+    const baseUrl = `${originalUrl.protocol}//${originalUrl.host}`;
+
+    // Replace relative URLs with absolute ones
+    html = html
+      .replace(/href=\"\/([^\"]*)\"/g, `href=\"${baseUrl}/$1\"`)
+      .replace(/src=\"\/([^\"]*)\"/g, `src=\"${baseUrl}/$1\"`)
+      .replace(/url\(\/([^)]*)\)/g, `url(${baseUrl}/$1)`);
+
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.send(html);
+
+  } catch (error) {
+    console.error('❌ GET proxy error:', error);
+    res.status(500).json({ error: error.message });
   }
-
-  if (!result) {
-    return res.status(404).json({ error: 'Proxy result not found or expired' });
-  }
-
-  // Check if expired
-  if (Date.now() > result.expiresAt) {
-    return res.status(404).json({ error: 'Proxy result expired' });
-  }
-
-  // Serve HTML with basic URL rewriting for resources
-  let html = result.body;
-
-  // Basic URL rewriting for common relative URLs
-  const originalUrl = new URL(result.originalUrl);
-  const baseUrl = `${originalUrl.protocol}//${originalUrl.host}`;
-
-  // Replace relative URLs with absolute ones
-  html = html
-    .replace(/href=\"\/([^\"]*)\"/g, `href=\"${baseUrl}/$1\"`)
-    .replace(/src=\"\/([^\"]*)\"/g, `src=\"${baseUrl}/$1\"`)
-    .replace(/url\(\/([^)]*)\)/g, `url(${baseUrl}/$1)`);
-
-  res.setHeader('Content-Type', 'text/html; charset=utf-8');
-  res.send(html);
 });
 
 export default app;
