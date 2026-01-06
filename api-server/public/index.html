@@ -244,8 +244,8 @@ async function openProxied() {
   showResult("🔄 Creating private link...");
   const data = await postToProxy({ url });
   
-  if (data && data.requestId) {
-    const proxiedUrl = `https://nym-proxy-backend.vercel.app/v1/proxy/${data.requestId}`;
+  if (data && data.token) {
+    const proxiedUrl = `https://nym-proxy-backend.vercel.app/v1/proxy/${data.token}`;
     showResult(`✅ Opening privately...<br><small style="color:#718096;">${proxiedUrl}</small>`);
     setTimeout(() => window.open(proxiedUrl, "_blank"), 500);
   }
@@ -258,8 +258,8 @@ async function copyProxiedLink() {
   showResult("🔄 Generating shareable link...");
   const data = await postToProxy({ url });
   
-  if (data && data.requestId) {
-    const proxiedUrl = `https://nym-proxy-backend.vercel.app/v1/proxy/${data.requestId}`;
+  if (data && data.token) {
+    const proxiedUrl = `https://nym-proxy-backend.vercel.app/v1/proxy/${data.token}`;
     
     try {
       await navigator.clipboard.writeText(proxiedUrl);
