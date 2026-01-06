@@ -1,0 +1,10 @@
+﻿{
+  "functions": {
+    "api/v1-health.js": {
+      "runtime": "nodejs18.x"
+    }
+  },
+  "routes": [
+    { "src": "/v1/health", "dest": "/api/v1-health.js" }
+  ]
+}
