@@ -1,0 +1,46 @@
+version: '3.8'
+
+services:
+  nym-socks5:
+    build:
+      context: .
+      dockerfile: Dockerfile.nym-socks5
+    container_name: nym-proxy-socks5
+    ports:
+      - "1080:1080"
+    environment:
+      - NYM_GATEWAY=${NYM_GATEWAY:-6Gb7ftQdKveMjPyrxDXeAtfYAX7Zg5mVZHtnRC5MmZ1B}
+      - NYM_NETWORK_REQUESTER=${NYM_NETWORK_REQUESTER:-8rRGWy54oC8drFL9DepMegBt2DLrsqQwCoHMXt9nsnTo.2XjCPVbb4FpQ9hNRcXwb9mTzEAVVk1zf1tcch3wdtNEA@6Gb7ftQdKveMjPyrxDXeAtfYAX7Zg5mVZHtnRC5MmZ1B}
+    restart: unless-stopped
+    volumes:
+      - nym-config:/root/.nym
+    networks:
+      - nym-network
+    healthcheck:
+      test: ["CMD", "curl", "--socks5", "localhost:1080", "https://nymtech.net/favicon.svg"]
+      interval: 5m
+      timeout: 30s
+      retries: 3
+      start_period: 2m
+
+  # Uncomment to run your own Network Requester with custom whitelist
+  # nym-network-requester:
+  #   build:
+  #     context: .
+  #     dockerfile: Dockerfile.network-requester
+  #   container_name: nym-network-requester
+  #   restart: unless-stopped
+  #   volumes:
+  #     - nr-config:/root/.nym
+  #   networks:
+  #     - nym-network
+  #   depends_on:
+  #     - nym-socks5
+
+networks:
+  nym-network:
+    driver: bridge
+
+volumes:
+  nym-config:
+  nr-config:

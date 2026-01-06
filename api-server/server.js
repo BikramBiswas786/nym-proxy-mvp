@@ -15,12 +15,79 @@ app.use(express.static('public'));
 // In-memory store for KV store IDs (for serverless, could use a persistent DB)
 const tokenToKvStore = new Map();
 
+// GET /v1/status - Check mixnet status
+app.get('/v1/status', async (req, res) => {
+  try {
+    const startTime = Date.now();
+    
+    // Check if mixnet is configured
+    const mixnetConfigured = !!(process.env.NYM_SOCKS5_HOST && process.env.NYM_SOCKS5_PORT);
+    
+    // Test mixnet connectivity if configured
+    let mixnetHealthy = false;
+    let latency = null;
+    let error = null;
+    
+    if (mixnetConfigured) {
+      try {
+        const testRun = await client.actor('integrative_operative/my-actor').call({
+          url: 'https://nymtech.net/favicon.svg',
+          method: 'GET',
+          timeoutMs: 45000,
+          useMixnet: true
+        }, { timeout: 50000 });
+        
+        const { items } = await client.dataset(testRun.defaultDatasetId).listItems();
+        const result = items[0];
+        
+        if (result && result.status === 200) {
+          mixnetHealthy = true;
+          latency = result.duration;
+        } else {
+          error = 'Mixnet test request failed';
+        }
+      } catch (err) {
+        console.error('Mixnet health check failed:', err);
+        error = err.message;
+      }
+    }
+    
+    res.json({
+      mixnetEnabled: mixnetConfigured && mixnetHealthy,
+      mixnetConfigured,
+      mixnetHealthy,
+      latency,
+      error,
+      checkDuration: Date.now() - startTime,
+      timestamp: new Date().toISOString(),
+      socks5Host: mixnetConfigured ? process.env.NYM_SOCKS5_HOST : 'not configured',
+      socks5Port: mixnetConfigured ? process.env.NYM_SOCKS5_PORT : 'not configured',
+      privacy: {
+        current: mixnetHealthy ? 'Maximum (5-hop mixnet)' : 'Basic (Standard proxy)',
+        ipHidden: true,
+        metadataProtection: mixnetHealthy,
+        trafficAnalysisResistance: mixnetHealthy,
+        decentralized: mixnetHealthy
+      }
+    });
+    
+  } catch (error) {
+    console.error('❌ Status check error:', error);
+    res.status(500).json({ 
+      error: error.message,
+      mixnetEnabled: false,
+      timestamp: new Date().toISOString()
+    });
+  }
+});
+
 // POST /v1/proxy - Create private proxy link
 app.post('/v1/proxy', async (req, res) => {
   try {
-    const { url, method = 'GET', headers = {}, body, timeoutMs = 90000 } = req.body;
+    const { url, method = 'GET', headers = {}, body, timeoutMs = 90000, useMixnet = true } = req.body;
 
     console.log('🚀 Proxying request for:', url);
+    console.log('🔒 Mixnet requested:', useMixnet);
 
     // Run Apify actor
     const run = await client.actor('integrative_operative/my-actor').call({
@@ -28,7 +95,8 @@ app.post('/v1/proxy', async (req, res) => {
       method,
       headers,
       body,
-      timeoutMs
+      timeoutMs,
+      useMixnet: useMixnet && !!(process.env.NYM_SOCKS5_HOST)
     });
 
     // Wait for actor to finish and get dataset
@@ -64,8 +132,11 @@ app.post('/v1/proxy', async (req, res) => {
       token,
       viewUrl,
       viaProxy: true,
+      viaMixnet: result.mixnetUsed || false,
       status: result.status,
-      kvStoreId: run.defaultKeyValueStoreId
+      duration: result.duration,
+      kvStoreId: run.defaultKeyValueStoreId,
+      privacyLevel: result.mixnetUsed ? 'maximum' : 'basic'
     });
 
   } catch (error) {
@@ -127,9 +198,9 @@ app.get('/v1/proxy/:token', async (req, res) => {
 
     // Replace relative URLs with absolute ones
     html = html
-      .replace(/href=\"\/([^\"]*)\"/g, `href=\"${baseUrl}/$1\"`)
-      .replace(/src=\"\/([^\"]*)\"/g, `src=\"${baseUrl}/$1\"`)
-      .replace(/url\(\/([^)]*)\)/g, `url(${baseUrl}/$1)`);
+      .replace(/href=\"\/(\[^\"\]*)\"/g, `href=\"${baseUrl}/$1\"`)
+      .replace(/src=\"\/(\[^\"\]*)\"/g, `src=\"${baseUrl}/$1\"`)
+      .replace(/url\(\/(\[^)\]*)\)/g, `url(${baseUrl}/$1)`);
 
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
     res.send(html);

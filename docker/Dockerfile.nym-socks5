@@ -1,0 +1,26 @@
+FROM ubuntu:22.04
+
+ENV NYM_VERSION=v2024.12-chomp
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update && apt-get install -y \
+    wget \
+    curl \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /nym
+
+# Download Nym SOCKS5 client
+RUN wget https://github.com/nymtech/nym/releases/download/${NYM_VERSION}/nym-socks5-client || \
+    wget https://github.com/nymtech/nym/releases/latest/download/nym-socks5-client && \
+    chmod +x nym-socks5-client
+
+# Copy entrypoint script
+COPY docker-entrypoint.sh /usr/local/bin/
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+
+EXPOSE 1080
+
+ENTRYPOINT ["docker-entrypoint.sh"]
+CMD ["./nym-socks5-client", "run", "--id", "docker-client"]

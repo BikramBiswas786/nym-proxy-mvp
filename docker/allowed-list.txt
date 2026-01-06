@@ -1,0 +1,31 @@
+# Custom whitelist for Nym Proxy Network Requester
+# Add domains you want to allow through your Network Requester
+
+# Testing domains
+nymtech.net
+*.nymtech.net
+httpbin.org
+*.httpbin.org
+
+# News sites
+nytimes.com
+*.nytimes.com
+bbc.com
+*.bbc.com
+
+# Blocked in India
+tiktok.com
+*.tiktok.com
+ullu.app
+*.ullu.app
+
+# Social media
+twitter.com
+*.twitter.com
+x.com
+*.x.com
+reddit.com
+*.reddit.com
+
+# Generic patterns
+# Add your custom domains below
