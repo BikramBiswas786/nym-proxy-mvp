@@ -13,6 +13,8 @@ const VALID_API_KEYS = new Set(
   (process.env.VALID_API_KEYS || '').split(',').map(k => k.trim()).filter(Boolean)
 );
 const requestLog = [];
+const proxyResults = new Map(); // Store proxy results by token ID
+
 function authenticate(req, res, next) {
   const auth = req.headers.authorization;
   if (!auth) {
@@ -56,15 +58,35 @@ app.post('/v1/proxy', authenticate, async (req, res) => {
     if (!result) {
       return res.status(502).json({ error: 'No result' });
     }
+        // Store result for later retrieval
+        const token = req.requestId;
+        proxyResults.set(token, result.value);
+        // Auto-expire after 24 hours
+        setTimeout(() => proxyResults.delete(token), 24 * 60 * 60 * 1000);
     res.json({
       requestId: req.requestId,
       result: result.value,
+            viewUrl: `/v1/proxy/${token}`,
       viaProxy: true
     });
   } catch (err) {
     res.status(502).json({ error: err.message });
   }
 });
+
+// GET endpoint to view proxy result by token
+app.get('/v1/proxy/:token', (req, res) => {
+    const { token } = req.params;
+    const result = proxyResults.get(token);
+
+    if (!result) {
+          return res.status(404).json({ error: 'Proxy result not found or expired' });
+        }
+
+    // Serve the HTML content directly
+    res.setHeader('Content-Type', 'text/html');
+    res.send(result.body || result);
+  });
 
 // Root route - Beautiful landing page
 app.get('/', (req, res) => {
@@ -294,5 +316,6 @@ app.listen(PORT, () => {
 
 
 // Fix template literal in Authorization header - deployment
+
 
 
