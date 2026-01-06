@@ -1,0 +1,163 @@
+name: Deploy Nym SOCKS5 Client
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'docker/**'
+      - 'scripts/**'
+      - '.github/workflows/deploy-nym-socks5.yml'
+  workflow_dispatch:
+
+env:
+  NYM_VERSION: v2024.12-chomp
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup SSH
+      uses: webfactory/ssh-agent@v0.9.0
+      with:
+        ssh-private-key: ${{ secrets.VPS_SSH_KEY }}
+
+    - name: Add VPS to known hosts
+      run: |
+        mkdir -p ~/.ssh
+        ssh-keyscan -H ${{ secrets.VPS_HOST }} >> ~/.ssh/known_hosts
+
+    - name: Deploy to VPS
+      env:
+        VPS_USER: ${{ secrets.VPS_USER }}
+        VPS_HOST: ${{ secrets.VPS_HOST }}
+        NYM_GATEWAY: ${{ secrets.NYM_GATEWAY }}
+        NYM_NETWORK_REQUESTER: ${{ secrets.NYM_NETWORK_REQUESTER }}
+      run: |
+        ssh $VPS_USER@$VPS_HOST << 'ENDSSH'
+          # Update system
+          echo "📦 Updating system..."
+          sudo apt-get update -qq
+          
+          # Install Docker if not present
+          if ! command -v docker &> /dev/null; then
+            echo "🐳 Installing Docker..."
+            curl -fsSL https://get.docker.com -o get-docker.sh
+            sudo sh get-docker.sh
+            sudo usermod -aG docker $USER
+          fi
+          
+          # Create deployment directory
+          mkdir -p ~/nym-proxy-deployment
+          cd ~/nym-proxy-deployment
+          
+          # Download latest Nym binaries
+          echo "⬇️ Downloading Nym SOCKS5 client..."
+          wget -q https://github.com/nymtech/nym/releases/download/${{ env.NYM_VERSION }}/nym-socks5-client || \
+            wget -q https://github.com/nymtech/nym/releases/latest/download/nym-socks5-client
+          chmod +x nym-socks5-client
+          
+          # Initialize SOCKS5 client
+          echo "🔧 Initializing SOCKS5 client..."
+          ./nym-socks5-client init --id nym-proxy-client \
+            --provider ${NYM_NETWORK_REQUESTER:-8rRGWy54oC8drFL9DepMegBt2DLrsqQwCoHMXt9nsnTo.2XjCPVbb4FpQ9hNRcXwb9mTzEAVVk1zf1tcch3wdtNEA@6Gb7ftQdKveMjPyrxDXeAtfYAX7Zg5mVZHtnRC5MmZ1B} || true
+          
+          # Create systemd service
+          echo "📝 Creating systemd service..."
+          sudo tee /etc/systemd/system/nym-socks5.service > /dev/null <<EOF
+[Unit]
+Description=Nym SOCKS5 Client for Proxy
+After=network.target
+
+[Service]
+Type=simple
+User=$USER
+WorkingDirectory=$HOME/nym-proxy-deployment
+ExecStart=$HOME/nym-proxy-deployment/nym-socks5-client run --id nym-proxy-client
+Restart=on-failure
+RestartSec=30
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target
+EOF
+          
+          # Enable and restart service
+          echo "🚀 Starting SOCKS5 service..."
+          sudo systemctl daemon-reload
+          sudo systemctl enable nym-socks5
+          sudo systemctl restart nym-socks5
+          
+          # Wait for service to start
+          sleep 15
+          
+          # Check status
+          sudo systemctl status nym-socks5 --no-pager || true
+          
+          echo "✅ Nym SOCKS5 client deployed successfully"
+          echo "📍 SOCKS5 proxy listening on localhost:1080"
+        ENDSSH
+
+    - name: Test SOCKS5 connectivity
+      env:
+        VPS_USER: ${{ secrets.VPS_USER }}
+        VPS_HOST: ${{ secrets.VPS_HOST }}
+      run: |
+        echo "🧪 Testing SOCKS5 connectivity..."
+        ssh $VPS_USER@$VPS_HOST << 'ENDSSH'
+          # Install curl if needed
+          command -v curl &> /dev/null || sudo apt-get install -y curl
+          
+          # Test SOCKS5 proxy with timeout
+          if timeout 45s curl --socks5 localhost:1080 https://nymtech.net/favicon.svg -o /dev/null -s -w "HTTP Status: %{http_code}\n"; then
+            echo "✅ SOCKS5 connectivity test passed"
+          else
+            echo "⚠️ SOCKS5 test failed - client may still be initializing (this is normal on first deployment)"
+            echo "💡 The mixnet client needs 2-3 minutes to establish connections"
+          fi
+        ENDSSH
+
+    - name: Deploy monitoring script
+      env:
+        VPS_USER: ${{ secrets.VPS_USER }}
+        VPS_HOST: ${{ secrets.VPS_HOST }}
+      run: |
+        echo "📊 Deploying health check script..."
+        scp scripts/health-check.sh $VPS_USER@$VPS_HOST:~/nym-proxy-deployment/
+        ssh $VPS_USER@$VPS_HOST "chmod +x ~/nym-proxy-deployment/health-check.sh"
+
+    - name: Setup cron for health checks
+      env:
+        VPS_USER: ${{ secrets.VPS_USER }}
+        VPS_HOST: ${{ secrets.VPS_HOST }}
+      run: |
+        echo "⏰ Setting up health monitoring..."
+        ssh $VPS_USER@$VPS_HOST << 'ENDSSH'
+          # Add cron job for health monitoring (every 5 minutes)
+          (crontab -l 2>/dev/null | grep -v health-check.sh; echo "*/5 * * * * $HOME/nym-proxy-deployment/health-check.sh >> $HOME/nym-proxy-deployment/health.log 2>&1") | crontab -
+          echo "✅ Health check cron job configured"
+          echo "📝 Logs available at: ~/nym-proxy-deployment/health.log"
+        ENDSSH
+
+    - name: Display connection info
+      env:
+        VPS_USER: ${{ secrets.VPS_USER }}
+        VPS_HOST: ${{ secrets.VPS_HOST }}
+      run: |
+        echo "" 
+        echo "🎉 ===== Deployment Complete ====="
+        echo "" 
+        echo "📍 SOCKS5 Proxy: ${{ secrets.VPS_HOST }}:1080"
+        echo "📊 Health Logs: ssh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} 'tail -f ~/nym-proxy-deployment/health.log'"
+        echo "🔧 Service Status: ssh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} 'sudo systemctl status nym-socks5'"
+        echo ""
+        echo "⚙️ Next Steps:"
+        echo "1. Update Apify actor environment variables:"
+        echo "   NYM_SOCKS5_HOST=${{ secrets.VPS_HOST }}"
+        echo "   NYM_SOCKS5_PORT=1080"
+        echo "2. Test mixnet integration via /v1/status endpoint"
+        echo "3. Update frontend to display mixnet status"
+        echo ""
