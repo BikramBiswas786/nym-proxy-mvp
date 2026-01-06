@@ -6,6 +6,9 @@ import cors from 'cors';
 const app = express();
 const client = new ApifyClient({ token: process.env.APIFY_API_TOKEN });
 
+// Use a dedicated shared KV store for all proxy results
+const PROXY_STORE_NAME = 'nym-proxy-results';
+
 app.use(cors());
 app.use(express.json());
 
@@ -44,8 +47,8 @@ app.post('/v1/proxy', async (req, res) => {
       expiresAt: Date.now() + (24 * 60 * 60 * 1000) // 24 hours
     };
 
-    // Store in Apify KV store (persists across serverless invocations)
-    await client.keyValueStore(run.defaultKeyValueStoreId).setRecord({
+    // Store in a dedicated shared KV store
+    await client.keyValueStore(PROXY_STORE_NAME).setRecord({
       key: `proxy_${token}`,
       value: resultWithMeta,
       contentType: 'application/json'
@@ -58,8 +61,7 @@ app.post('/v1/proxy', async (req, res) => {
       token,
       viewUrl,
       viaProxy: true,
-      status: result.status,
-      kvStoreId: run.defaultKeyValueStoreId
+      status: result.status
     });
 
   } catch (error) {
@@ -73,27 +75,14 @@ app.get('/v1/proxy/:token', async (req, res) => {
   try {
     const { token } = req.params;
 
-    // Try to get from Apify KV store
-    // We need to search across recent runs' KV stores
-    const actorRuns = await client.actor('integrative_operative/my-actor').runs().list({ limit: 10 });
+    // Get from the dedicated shared KV store
+    const record = await client.keyValueStore(PROXY_STORE_NAME).getRecord(`proxy_${token}`);
 
-    let result = null;
-    for (const run of actorRuns.items) {
-      try {
-        const record = await client.keyValueStore(run.defaultKeyValueStoreId).getRecord(`proxy_${token}`);
-        if (record) {
-          result = record.value;
-          break;
-        }
-      } catch (e) {
-        // KV store doesn't have this token, continue
-        continue;
-      }
-    }
-
-    if (!result) {
+    if (!record || !record.value) {
       return res.status(404).json({ error: 'Proxy result not found or expired' });
     }
+
+    const result = record.value;
 
     // Check if expired
     if (Date.now() > result.expiresAt) {
