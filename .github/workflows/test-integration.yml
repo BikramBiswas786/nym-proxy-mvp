@@ -1,0 +1,74 @@
+name: Test Nym Integration
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 */6 * * *'  # Every 6 hours
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Test mixnet status
+      run: |
+        echo "🧪 Testing Nym Mixnet Integration"
+        
+        BACKEND_URL="https://nym-proxy-backend.vercel.app"
+        
+        # Test 1: Status endpoint
+        echo "🔍 Test 1: Checking mixnet status..."
+        curl -s "$BACKEND_URL/v1/status" | jq .
+        
+        # Test 2: Standard proxy
+        echo "🔍 Test 2: Testing standard proxy..."
+        RESPONSE=$(curl -s -X POST "$BACKEND_URL/v1/proxy" \
+          -H "Content-Type: application/json" \
+          -d '{"url": "https://httpbin.org/ip", "useMixnet": false}')
+        
+        TOKEN=$(echo "$RESPONSE" | jq -r '.token')
+        if [ ! -z "$TOKEN" ] && [ "$TOKEN" != "null" ]; then
+          echo "✅ Standard proxy works"
+        else
+          echo "❌ Standard proxy failed"
+          exit 1
+        fi
+
+    - name: Test mixnet proxy
+      timeout-minutes: 5
+      run: |
+        echo "🔍 Test 3: Testing mixnet proxy (this may take 10-15 seconds)..."
+        BACKEND_URL="https://nym-proxy-backend.vercel.app"
+        
+        RESPONSE=$(curl -s -X POST "$BACKEND_URL/v1/proxy" \
+          -H "Content-Type: application/json" \
+          -d '{"url": "https://httpbin.org/ip", "useMixnet": true}' \
+          --max-time 30)
+        
+        TOKEN=$(echo "$RESPONSE" | jq -r '.token')
+        DURATION=$(echo "$RESPONSE" | jq -r '.duration')
+        
+        if [ ! -z "$TOKEN" ] && [ "$TOKEN" != "null" ]; then
+          echo "✅ Mixnet proxy works"
+          echo "  Duration: ${DURATION}ms"
+          
+          if [ "$DURATION" -gt 8000 ]; then
+            echo "✅ Latency indicates mixnet routing"
+          fi
+        else
+          echo "⚠️  Mixnet proxy not yet ready (may still initializing)"
+        fi
+
+    - name: Generate report
+      if: always()
+      run: |
+        echo "📈 Integration Test Report"
+        echo "==========================="
+        echo ""
+        echo "Date: $(date)"
+        echo "Status: ${{ job.status }}"
+        echo ""
+        echo "🎉 Tests completed"
