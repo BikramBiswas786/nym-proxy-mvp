@@ -262,7 +262,7 @@ async function openPrivately() {
         }, 500);
         
     } catch (err) {
-        showResult(`<span style="color:#f56565">❌ Error: \${err.message}</span>`, true);
+showResult('<span style="color:#f56565">❌ Error: ' + err.message + '</span>', true);
     }
 }
 
@@ -294,4 +294,5 @@ app.listen(PORT, () => {
 
 
 // Fix template literal in Authorization header - deployment
+
 
