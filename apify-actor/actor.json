@@ -1,0 +1,71 @@
+{
+  "actorSpecVersion": 1,
+  "name": "nym-proxy-actor",
+  "title": "Nym Proxy Actor - Privacy-Focused HTTP Proxy",
+  "description": "Actor that routes HTTP requests through the Nym mixnet for enhanced privacy, with fallback to standard proxy",
+  "version": "2.0.0",
+  "meta": {
+    "author": "BikramBiswas786",
+    "source": "https://github.com/BikramBiswas786/nym-proxy-mvp"
+  },
+  "input": {
+    "title": "Proxy Configuration",
+    "type": "object",
+    "schemaVersion": 1,
+    "properties": {
+      "url": {
+        "title": "Target URL",
+        "type": "string",
+        "description": "The website URL to proxy through Nym",
+        "editor": "textfield",
+        "isRequired": true
+      },
+      "method": {
+        "title": "HTTP Method",
+        "type": "string",
+        "description": "HTTP method (GET, POST, PUT, DELETE, etc.)",
+        "editor": "select",
+        "default": "GET",
+        "enum": ["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"]
+      },
+      "headers": {
+        "title": "Custom Headers",
+        "type": "object",
+        "description": "Custom HTTP headers as key-value pairs",
+        "editor": "json",
+        "default": {}
+      },
+      "body": {
+        "title": "Request Body",
+        "type": "string",
+        "description": "Request body for POST/PUT requests",
+        "editor": "textarea"
+      },
+      "timeoutMs": {
+        "title": "Request Timeout (ms)",
+        "type": "integer",
+        "description": "Maximum time to wait for response (milliseconds)",
+        "default": 120000,
+        "minimum": 5000,
+        "maximum": 300000
+      },
+      "useMixnet": {
+        "title": "Use Nym Mixnet",
+        "type": "boolean",
+        "description": "Route through Nym 5-hop mixnet for maximum privacy (slower but more private)",
+        "default": true
+      }
+    },
+    "required": ["url"]
+  },
+  "dockerfile": "Dockerfile",
+  "categories": [
+    "SCRAPERS",
+    "SECURITY",
+    "PRIVACY"
+  ],
+  "resources": {
+    "memoryMbytes": 512,
+    "cpuCores": 0.5
+  }
+}
