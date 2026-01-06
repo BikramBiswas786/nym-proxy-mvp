@@ -7,6 +7,7 @@ dotenv.config();
 const app = express();
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
+app.use(express.static('public')); // Serve static files
 const client = new ApifyClient({ token: process.env.APIFY_TOKEN });
 const VALID_API_KEYS = new Set(
   (process.env.VALID_API_KEYS || '').split(',').map(k => k.trim()).filter(Boolean)
@@ -87,5 +88,6 @@ app.listen(PORT, () => {
 });
 
 // deployment trigger - fix
+
 
 
