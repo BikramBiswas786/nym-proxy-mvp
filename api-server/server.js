@@ -54,6 +54,7 @@ const resultWithMeta = {
         const viewUrl = `${req.protocol}://${req.get('host')}/v1/proxy/${token}`;
         
         res.json({
+                    });
             requestId: run.id,
             token,
             viewUrl,
@@ -69,11 +70,11 @@ const resultWithMeta = {
 });
 
 // GET /v1/proxy/:token - View proxied content
-app.get('/v1/proxy/:token', (req, res) => {
+app.get('/v1/proxy/:token', async (req, res) => {
     const { token } = req.params;
         
         // Try to get from Apify KV store
-        // We need to search across recent runs' KV stores
+        // We need to searchasync  across recent runs' KV stores
         const actorRuns = await client.actor('integrative_operative/my-actor').runs().list({ limit: 10 });
         
         let result = null;
@@ -121,4 +122,5 @@ app.listen(PORT, () => {
 });
 
 export default app;
+
 
