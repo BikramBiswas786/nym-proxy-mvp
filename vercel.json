@@ -1,10 +1,15 @@
 ﻿{
-  "functions": {
-    "api/v1-health.js": {
-      "runtime": "nodejs18.x"
+  "version": 2,
+  "builds": [
+    {
+      "src": "api/v1-health.js",
+      "use": "@vercel/node"
     }
-  },
+  ],
   "routes": [
-    { "src": "/v1/health", "dest": "/api/v1-health.js" }
+    {
+      "src": "/v1/health",
+      "dest": "/api/v1-health.js"
+    }
   ]
 }
