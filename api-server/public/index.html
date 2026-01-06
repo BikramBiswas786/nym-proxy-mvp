@@ -1,0 +1,281 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Nym Proxy — One-Click Privacy</title>
+  <meta name="description" content="Paste any URL and open it privately. No install. No tracking. Powered by Nym mixnet." />
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { 
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 20px;
+    }
+    .container { 
+      max-width: 700px;
+      width: 100%;
+      background: white;
+      padding: 40px;
+      border-radius: 16px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+    }
+    h1 { 
+      color: #1a202c;
+      font-size: 2.5rem;
+      margin-bottom: 10px;
+      font-weight: 700;
+    }
+    .tagline { 
+      color: #4a5568;
+      font-size: 1.1rem;
+      margin-bottom: 30px;
+      line-height: 1.6;
+    }
+    input { 
+      width: 100%;
+      padding: 16px;
+      font-size: 16px;
+      border: 2px solid #e2e8f0;
+      border-radius: 8px;
+      margin-bottom: 20px;
+      transition: border-color 0.3s;
+    }
+    input:focus {
+      outline: none;
+      border-color: #667eea;
+    }
+    .buttons { 
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-bottom: 20px;
+    }
+    button { 
+      padding: 14px 24px;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 16px;
+      font-weight: 600;
+      transition: all 0.3s;
+      flex: 1;
+      min-width: 140px;
+    }
+    .primary { 
+      background: #667eea;
+      color: white;
+    }
+    .primary:hover {
+      background: #5568d3;
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+    }
+    .secondary { 
+      background: #f7fafc;
+      color: #2d3748;
+      border: 2px solid #e2e8f0;
+    }
+    .secondary:hover {
+      background: #edf2f7;
+    }
+    #result { 
+      margin-top: 20px;
+      padding: 20px;
+      background: #f7fafc;
+      border-radius: 8px;
+      border-left: 4px solid #667eea;
+      font-size: 14px;
+      line-height: 1.6;
+      max-height: 400px;
+      overflow-y: auto;
+    }
+    .footer { 
+      font-size: 13px;
+      color: #718096;
+      margin-top: 30px;
+      padding-top: 20px;
+      border-top: 1px solid #e2e8f0;
+      text-align: center;
+    }
+    .footer a { 
+      color: #667eea;
+      text-decoration: none;
+      font-weight: 600;
+    }
+    .footer a:hover {
+      text-decoration: underline;
+    }
+    .features {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 15px;
+      margin: 30px 0;
+      padding: 20px;
+      background: #f7fafc;
+      border-radius: 8px;
+    }
+    .feature {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 14px;
+      color: #4a5568;
+    }
+    .feature::before {
+      content: '✓';
+      color: #48bb78;
+      font-weight: bold;
+      font-size: 18px;
+    }
+    @media (max-width: 600px) {
+      h1 { font-size: 2rem; }
+      .buttons { flex-direction: column; }
+      button { width: 100%; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🔒 Nym Privacy Proxy</h1>
+    <p class="tagline">
+      Paste a link. Open it privately. No install. No tracking.
+      <br>We fetch the page for you and give you a shareable private link.
+    </p>
+    
+    <input 
+      id="urlInput" 
+      placeholder="https://example.com" 
+      autofocus 
+    />
+    
+    <div class="buttons">
+      <button class="primary" onclick="openProxied()">🚀 Open Privately</button>
+      <button class="primary" onclick="copyProxiedLink()">📋 Copy Link</button>
+      <button class="secondary" onclick="previewUrl()">👁️ Preview</button>
+    </div>
+    
+    <div class="features">
+      <div class="feature">IP hidden</div>
+      <div class="feature">Shareable tokens</div>
+      <div class="feature">24h expiry</div>
+      <div class="feature">No cookies</div>
+    </div>
+    
+    <div id="result" style="display:none;"></div>
+    
+    <div class="footer">
+      <strong>Beta:</strong> Currently using cloud proxy. Full Nym mixnet integration coming soon.
+      <br>
+      <a href="https://github.com/BikramBiswas786/nym-proxy-mvp" target="_blank">GitHub</a> | 
+      Use responsibly · Privacy-focused
+    </div>
+  </div>
+
+<script>
+const API_URL = "https://nym-proxy-backend.vercel.app/v1/proxy";
+const AUTH_KEY = "test_key_123";
+
+function showResult(message, isError = false) {
+  const resultDiv = document.getElementById("result");
+  resultDiv.style.display = "block";
+  resultDiv.style.borderLeftColor = isError ? "#f56565" : "#667eea";
+  resultDiv.style.background = isError ? "#fff5f5" : "#f7fafc";
+  resultDiv.innerHTML = message;
+}
+
+async function postToProxy(payload) {
+  try {
+    const response = await fetch(API_URL, {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${AUTH_KEY}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(payload)
+    });
+    
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || `API error: ${response.status}`);
+    }
+    
+    return await response.json();
+  } catch (err) {
+    showResult(`❌ Error: ${err.message}`, true);
+    return null;
+  }
+}
+
+function getUrl() {
+  const url = document.getElementById("urlInput").value.trim();
+  if (!url) {
+    showResult("⚠️ Please paste a URL", true);
+    return null;
+  }
+  if (!url.startsWith("http://") && !url.startsWith("https://")) {
+    showResult("⚠️ URL must start with http:// or https://", true);
+    return null;
+  }
+  return url;
+}
+
+async function previewUrl() {
+  const url = getUrl();
+  if (!url) return;
+  
+  showResult("🔄 Fetching preview...");
+  const data = await postToProxy({ url });
+  
+  if (data && data.result) {
+    const formatted = JSON.stringify(data.result, null, 2);
+    showResult(`<strong>Preview:</strong><pre style="margin-top:10px;background:#fff;padding:10px;border-radius:4px;">${formatted}</pre>`);
+  }
+}
+
+async function openProxied() {
+  const url = getUrl();
+  if (!url) return;
+  
+  showResult("🔄 Creating private link...");
+  const data = await postToProxy({ url });
+  
+  if (data && data.requestId) {
+    const proxiedUrl = `https://nym-proxy-backend.vercel.app/v1/proxy/${data.requestId}`;
+    showResult(`✅ Opening privately...<br><small style="color:#718096;">${proxiedUrl}</small>`);
+    setTimeout(() => window.open(proxiedUrl, "_blank"), 500);
+  }
+}
+
+async function copyProxiedLink() {
+  const url = getUrl();
+  if (!url) return;
+  
+  showResult("🔄 Generating shareable link...");
+  const data = await postToProxy({ url });
+  
+  if (data && data.requestId) {
+    const proxiedUrl = `https://nym-proxy-backend.vercel.app/v1/proxy/${data.requestId}`;
+    
+    try {
+      await navigator.clipboard.writeText(proxiedUrl);
+      showResult(`✅ Copied to clipboard!<br><br><code style="background:#fff;padding:8px;border-radius:4px;display:block;word-break:break-all;">${proxiedUrl}</code><br><small style="color:#718096;">Link expires in 24 hours · Share with anyone</small>`);
+    } catch (err) {
+      showResult(`✅ Link created:<br><br><code style="background:#fff;padding:8px;border-radius:4px;display:block;word-break:break-all;">${proxiedUrl}</code><br><small style="color:#718096;">Manually copy the link above</small>`);
+    }
+  }
+}
+
+// Auto-fill URL from query parameter
+const urlParams = new URLSearchParams(window.location.search);
+const urlParam = urlParams.get('url') || urlParams.get('u');
+if (urlParam) {
+  document.getElementById('urlInput').value = decodeURIComponent(urlParam);
+}
+</script>
+</body>
+</html>
