@@ -64,6 +64,20 @@ app.post('/v1/proxy', authenticate, async (req, res) => {
     res.status(502).json({ error: err.message });
   }
 });
+
+// Root route - API documentation
+app.get('/', (req, res) => {
+  res.json({
+    name: 'Nym Privacy Proxy API',
+    version: '1.0.0',
+    description: 'Privacy-focused HTTP proxy API powered by Nym mixnet',
+    endpoints: {
+      health: 'GET /v1/health',
+      proxy: 'POST /v1/proxy'
+    },
+    documentation: 'https://github.com/BikramBiswas786/nym-proxy-mvp'
+  });
+});
 app.get('/v1/health', (req, res) => {
   res.json({ status: 'ok' });
 });
@@ -73,4 +87,5 @@ app.listen(PORT, () => {
 });
 
 // deployment trigger - fix
+
 
