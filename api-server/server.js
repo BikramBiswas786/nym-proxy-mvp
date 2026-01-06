@@ -116,11 +116,8 @@ app.get('/v1/proxy/:token', async (req, res) => {
     res.send(html);
 });
 
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-    console.log(`✅ Nym Proxy server running on port ${PORT}`);
-});
 
 export default app;
+
 
 
