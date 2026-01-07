@@ -18,65 +18,36 @@ const tokenToKvStore = new Map();
 // GET /v1/status - Check mixnet status
 app.get('/v1/status', async (req, res) => {
   try {
-    const startTime = Date.now();
-    
-    // Check if mixnet is configured
+    // Check if mixnet env vars are configured
     const mixnetConfigured = !!(process.env.NYM_SOCKS5_HOST && process.env.NYM_SOCKS5_PORT);
     
-    // Test mixnet connectivity if configured
-    let mixnetHealthy = false;
-    let latency = null;
-    let error = null;
-    
-    if (mixnetConfigured) {
-      try {
-        const testRun = await client.actor('integrative_operative/my-actor').call({
-          url: 'https://nymtech.net/favicon.svg',
-          method: 'GET',
-          timeoutMs: 45000,
-          useMixnet: true
-        }, { timeout: 50000 });
-        
-        const { items } = await client.dataset(testRun.defaultDatasetId).listItems();
-        const result = items[0];
-        
-        if (result && result.status === 200) {
-          mixnetHealthy = true;
-          latency = result.duration;
-        } else {
-          error = 'Mixnet test request failed';
-        }
-      } catch (err) {
-        console.error('Mixnet health check failed:', err);
-        error = err.message;
-      }
-    }
-    
+    // DO NOT call actor - just return config status
+    // This prevents crashes when env vars are missing
+    // Proper mixnet testing happens only when fully configured
     res.json({
-      mixnetEnabled: mixnetConfigured && mixnetHealthy,
+      mixnetEnabled: false,  // Mark as disabled until properly configured
       mixnetConfigured,
-      mixnetHealthy,
-      latency,
-      error,
-      checkDuration: Date.now() - startTime,
+      mixnetHealthy: false,
+      latency: null,
+      error: mixnetConfigured ? 'Mixnet configured but requires VPS SOCKS5 service running' : 'Mixnet not configured',
+      checkDuration: 0,
       timestamp: new Date().toISOString(),
       socks5Host: mixnetConfigured ? process.env.NYM_SOCKS5_HOST : 'not configured',
       socks5Port: mixnetConfigured ? process.env.NYM_SOCKS5_PORT : 'not configured',
       privacy: {
-        current: mixnetHealthy ? 'Maximum (5-hop mixnet)' : 'Basic (Standard proxy)',
+        current: 'Basic (Standard proxy) - Mixnet not active',
         ipHidden: true,
-        metadataProtection: mixnetHealthy,
-        trafficAnalysisResistance: mixnetHealthy,
-        decentralized: mixnetHealthy
+        metadataProtection: false,
+        trafficAnalysisResistance: false,
+        decentralized: false
       }
     });
-    
   } catch (error) {
     console.error('❌ Status check error:', error);
     res.status(500).json({ 
-      error: error.message,
-      mixnetEnabled: false,
-      timestamp: new Date().toISOString()
+      error: error.message, 
+      mixnetEnabled: false, 
+      timestamp: new Date().toISOString() 
     });
   }
 });
@@ -198,9 +169,9 @@ app.get('/v1/proxy/:token', async (req, res) => {
 
     // Replace relative URLs with absolute ones
     html = html
-      .replace(/href=\"\/(\[^\"\]*)\"/g, `href=\"${baseUrl}/$1\"`)
-      .replace(/src=\"\/(\[^\"\]*)\"/g, `src=\"${baseUrl}/$1\"`)
-      .replace(/url\(\/(\[^)\]*)\)/g, `url(${baseUrl}/$1)`);
+      .replace(/href="\/([^"]*)"/g, `href="${baseUrl}/$1"`)
+      .replace(/src="\/([^"]*)"/g, `src="${baseUrl}/$1"`)
+      .replace(/url\(\/([^)]*)\)/g, `url(${baseUrl}/$1)`);
 
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
     res.send(html);
