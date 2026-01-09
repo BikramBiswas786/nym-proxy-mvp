@@ -18,7 +18,7 @@ class RedisClient {
 
   async set(key, value, exSeconds = 86400) {
     try {
-      const response = await fetch(`${this.url}/set/${key=?EX=${exSeconds}`, {
+      const response = await fetch(`${this.url}/set/${ke}?=?EX=${exSeconds}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(value),
