@@ -1,15 +1,5 @@
-# Nym Proxy MVP
-
-⚠️ **IMPORTANT: Mixnet Integration Status** ⚠️
-
-This application is currently in transition:
-- ✅ **Working:** Basic HTTP proxy functionality
-- 🚧 **In Progress:** Real Nym mixnet integration
-- ❌ **Not Yet Active:** 5-hop mixnet routing, metadata protection
-
-See [SETUP.md](SETUP.md) for complete integration guide.
-
----
+# Cloud Proxy
+-
 
 ## What This Application Does
 
@@ -21,15 +11,6 @@ See [SETUP.md](SETUP.md) for complete integration guide.
 - ✅ Token-based result retrieval
 - ✅ 24-hour result expiration
 - ⚠️ Apify can observe traffic patterns (not true anonymity)
-
-### Future Features (After Mixnet Integration)
-
-**Privacy Level:** Maximum (Nym mixnet)
-- 🔒 5-hop mixnet routing
-- 🔒 Packet mixing with dummy traffic
-- 🔒 Metadata protection (timing, volume, patterns)
-- 🔒 Traffic analysis resistance
-- 🔒 Decentralized infrastructure
 
 ---
 
@@ -319,17 +300,13 @@ MIT License - see LICENSE file for details.
 
 - **Live Application:** [nym-proxy-backend.vercel.app](https://nym-proxy-backend.vercel.app/)
 - **GitHub Repository:** [github.com/BikramBiswas786/nym-proxy-mvp](https://github.com/BikramBiswas786/nym-proxy-mvp)
-- **Nym Documentation:** [nymtech.net/docs](https://nymtech.net/docs)
-- **Nym Discord:** [discord.gg/nym](https://discord.gg/nym)
 
 ---
 
 ## Acknowledgments
 
-- **Nym Technologies** for the mixnet protocol
 - **Apify** for the serverless actor platform
 - **Vercel** for hosting
 
 ---
 
-**⚠️ Current Status: Mixnet integration in progress. Follow [SETUP.md](SETUP.md) to complete the integration.**
