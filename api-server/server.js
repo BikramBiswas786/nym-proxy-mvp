@@ -1,5 +1,4 @@
 import express from 'express';
-import fetch from 'node-fetch';
 import cors from 'cors';
 import crypto from 'crypto';
 
@@ -10,7 +9,6 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static('public'));
 
-// GET /v1/health - Health check
 app.get('/v1/health', async (req, res) => {
   try {
     res.json({
@@ -25,21 +23,16 @@ app.get('/v1/health', async (req, res) => {
   }
 });
 
-// POST /v1/proxy - Fetch and return content directly
 app.post('/v1/proxy', async (req, res) => {
   try {
     const { url, method = 'GET', headers = {}, body, timeoutMs = 90000 } = req.body;
 
-    // Validate URL
     try {
       new URL(url);
     } catch {
       return res.status(400).json({ error: 'Invalid URL format' });
     }
 
-    // Fetch the URL directly
-    console.log('Fetching URL:', url);
-    
     const fetchOptions = {
       method,
       headers: {
@@ -50,7 +43,6 @@ app.post('/v1/proxy', async (req, res) => {
       redirect: 'follow'
     };
 
-    // Add body if needed
     if (method !== 'GET' && body) {
       fetchOptions.body = typeof body === 'string' ? body : JSON.stringify(body);
     }
@@ -60,10 +52,8 @@ app.post('/v1/proxy', async (req, res) => {
     const responseBody = await response.text();
     const duration = Date.now() - startTime;
 
-    // Generate token
     const token = crypto.randomBytes(8).toString('hex');
     
-    // Cache the content
     contentCache.set(token, {
       url,
       originalUrl: response.url || url,
@@ -77,7 +67,6 @@ app.post('/v1/proxy', async (req, res) => {
       proxy: 'cloud'
     });
 
-    // Keep cache size manageable
     if (contentCache.size > 100) {
       const firstKey = contentCache.keys().next().value;
       contentCache.delete(firstKey);
@@ -96,7 +85,6 @@ app.post('/v1/proxy', async (req, res) => {
       token
     });
   } catch (error) {
-    console.error('Error:', error.message);
     res.status(500).json({
       success: false,
       error: error.message || 'Failed to fetch content',
@@ -105,7 +93,6 @@ app.post('/v1/proxy', async (req, res) => {
   }
 });
 
-// GET /v1/proxy/view/:token - View cached content
 app.get('/v1/proxy/view/:token', async (req, res) => {
   try {
     const { token } = req.params;
@@ -115,7 +102,6 @@ app.get('/v1/proxy/view/:token', async (req, res) => {
       return res.status(404).json({ error: 'Content not found or expired' });
     }
 
-    // Return HTML directly
     res.setHeader('Content-Type', cached.headers['content-type'] || 'text/html; charset=utf-8');
     res.send(cached.body);
   } catch (error) {
@@ -123,7 +109,6 @@ app.get('/v1/proxy/view/:token', async (req, res) => {
   }
 });
 
-// GET /v1/proxy/:token - Get cached metadata
 app.get('/v1/proxy/:token', async (req, res) => {
   try {
     const { token } = req.params;
@@ -150,8 +135,7 @@ app.get('/v1/proxy/:token', async (req, res) => {
   }
 });
 
-// Start server
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  console.log('Cloud Proxy Server running on port ' + PORT);
+  console.log('Cloud Proxy running on port ' + PORT);
 });
