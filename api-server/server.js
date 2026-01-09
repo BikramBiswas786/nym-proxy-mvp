@@ -1,10 +1,8 @@
 import express from 'express';
-import { ApifyClient } from 'apify-client';
 import { nanoid } from 'nanoid';
 import cors from 'cors';
 
 const app = express();
-const client = new ApifyClient({ token: process.env.APIFY_API_TOKEN });
 
 app.use(cors());
 app.use(express.json());
@@ -13,8 +11,6 @@ app.use(express.static('public'));
 // Redis Upstash REST API client
 class RedisClient {
   constructor(url) {
-    // Extract base URL and token from Upstash REST URL
-    // URL format: https://[token]@[host]:[port]
     this.url = url;
   }
 
@@ -92,7 +88,7 @@ app.post('/v1/proxy', async (req, res) => {
       return res.status(400).json({ error: 'URL is required' });
     }
 
-    console.log('🚀 Creating proxy link for:', url);
+    console.log('\ud83d\ude80 Creating proxy link for:', url);
     
     // Validate URL
     try {
@@ -101,22 +97,36 @@ app.post('/v1/proxy', async (req, res) => {
       return res.status(400).json({ error: 'Invalid URL format' });
     }
 
-    // Call Apify actor
-    const run = await client.actor('integrative_operative/my-actor').call({
-      url,
+    // Fetch the URL directly
+    const fetchOptions = {
       method,
       headers: headers || {},
-      body: body || undefined,
-      timeoutMs: Math.min(timeoutMs, 120000)
-    });
-
-    // Get dataset results
-    const { items } = await client.dataset(run.defaultDatasetId).listItems();
-    const result = items[0];
-
-    if (!result) {
-      return res.status(500).json({ error: 'Actor produced no results' });
+      timeout: Math.min(timeoutMs, 120000),
+    };
+    
+    if (body) {
+      fetchOptions.body = typeof body === 'string' ? body : JSON.stringify(body);
     }
+
+    const startTime = Date.now();
+    const response = await fetch(url, fetchOptions);
+    const duration = Date.now() - startTime;
+    
+    // Get response body
+    const responseBody = await response.text();
+    const size = Buffer.byteLength(responseBody, 'utf8');
+
+    // Prepare result object
+    const result = {
+      status: response.status,
+      statusText: response.statusText,
+      body: responseBody,
+      originalUrl: url,
+      duration,
+      size,
+      timestamp: new Date().toISOString(),
+      method
+    };
 
     // Generate token and store in Redis
     const token = nanoid(10);
@@ -143,7 +153,7 @@ app.post('/v1/proxy', async (req, res) => {
       originalUrl: result.originalUrl
     });
   } catch (error) {
-    console.error('❌ Proxy error:', error.message);
+    console.error('\u274c Proxy error:', error.message);
     res.status(500).json({ error: error.message });
   }
 });
@@ -180,7 +190,7 @@ app.get('/v1/proxy/:token', async (req, res) => {
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
     res.send(html);
   } catch (error) {
-    console.error('❌ GET proxy error:', error.message);
+    console.error('\u274c GET proxy error:', error.message);
     res.status(500).json({ error: error.message });
   }
 });
