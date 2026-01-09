@@ -1,5 +1,5 @@
 # Cloud Proxy
--
+-Private Proxy for Crypto Traders - Access APIs, Exchanges & DeFi Safely
 
 ## What This Application Does
 
