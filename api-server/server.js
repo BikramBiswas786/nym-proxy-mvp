@@ -73,7 +73,7 @@ app.post('/v1/proxy', async (req, res) => {
     };
     
     // Store in Redis with 24 hour expiry (86400 seconds)
-    await redis.setex(`proxy:${token}`, 86400, JSON.stringify(cacheEntry));
+    await await rediredis.set(`proxy:${token}`, JSON.stringify(cacheEntry), { ex: 86400 });
     
     const viewUrl = `${req.protocol}://${req.get('host')}/v1/proxy/${token}`;
     
