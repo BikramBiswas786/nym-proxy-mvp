@@ -2,16 +2,27 @@ import express from 'express';
 import { ApifyClient } from 'apify-client';
 import { nanoid } from 'nanoid';
 import cors from 'cors';
-import { Redis } from '@upstash/redis';
 
 const app = express();
 const client = new ApifyClient({ token: process.env.APIFY_API_TOKEN });
 
-// Initialize Upstash Redis client
-const redis = new Redis({
-  url: process.env.UPSTASH_REDIS_REST_URL,
-  token: process.env.UPSTASH_REDIS_REST_TOKEN,
-});
+// In-memory store for proxy results (24h expiry)
+const proxyCache = new Map();
+
+// Cleanup expired entries periodically (every 2 hours)
+setInterval(() => {
+  const now = Date.now();
+  let cleaned = 0;
+  for (const [key, value] of proxyCache.entries()) {
+    if (value.expiresAt < now) {
+      proxyCache.delete(key);
+      cleaned++;
+    }
+  }
+  if (cleaned > 0) {
+    console.log(`🧹 Cleaned ${cleaned} expired cache entries`);
+  }
+}, 2 * 60 * 60 * 1000); // Every 2 hours
 
 app.use(cors());
 app.use(express.json());
@@ -25,7 +36,8 @@ app.get('/v1/health', async (req, res) => {
       uptime: process.uptime(),
       timestamp: new Date().toISOString(),
       proxy: 'cloud',
-      message: 'Cloud Proxy - Fast & Secure'
+      message: 'Cloud Proxy - Fast & Secure',
+      cacheSize: proxyCache.size
     });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -48,6 +60,7 @@ app.post('/v1/proxy', async (req, res) => {
     } catch {
       return res.status(400).json({ error: 'Invalid URL format' });
     }
+    
     // Call Apify actor to fetch the URL
     const run = await client.actor('integrative_operative/my-actor').call({
       url,
@@ -65,16 +78,15 @@ app.post('/v1/proxy', async (req, res) => {
       return res.status(500).json({ error: 'Actor produced no results' });
     }
     
-    // Generate token and store in Redis with 24h expiry
+    // Generate token and store in memory cache
     const token = nanoid(10);
     const cacheEntry = {
       ...result,
       timestamp: Date.now(),
+      expiresAt: Date.now() + (24 * 60 * 60 * 1000) // 24 hours
     };
     
-    // Store in Redis with 24 hour expiry (86400 seconds)
-    await await rediredis.set(`proxy:${token}`, JSON.stringify(cacheEntry), { ex: 86400 });
-    
+    proxyCache.set(token, cacheEntry);
     const viewUrl = `${req.protocol}://${req.get('host')}/v1/proxy/${token}`;
     
     res.json({
@@ -96,15 +108,17 @@ app.post('/v1/proxy', async (req, res) => {
 app.get('/v1/proxy/:token', async (req, res) => {
   try {
     const { token } = req.params;
+    const result = proxyCache.get(token);
     
-    // Get from Redis
-    const cachedData = await redis.get(`proxy:${token}`);
-    
-    if (!cachedData) {
+    if (!result) {
       return res.status(404).json({ error: 'Proxy result not found or expired' });
     }
     
-    const result = JSON.parse(cachedData);
+    // Check if expired
+    if (Date.now() > result.expiresAt) {
+      proxyCache.delete(token);
+      return res.status(404).json({ error: 'Proxy result expired' });
+    }
     
     // Serve HTML with URL rewriting
     let html = result.body || '';
