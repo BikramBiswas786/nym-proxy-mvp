@@ -1,9 +1,9 @@
 {
   "actorSpecVersion": 1,
-  "name": "nym-proxy-actor",
-  "title": "Nym Proxy Actor - Privacy-Focused HTTP Proxy",
-  "description": "Actor that routes HTTP requests through the Nym mixnet for enhanced privacy, with fallback to standard proxy",
-  "version": "2.0.0",
+  "name": "cloud-proxy-actor",
+  "title": "Cloud Proxy Actor - Fast & Secure HTTP Proxy",
+  "description": "Fast and secure cloud-based HTTP proxy actor for fetching and serving web content privately",
+  "version": "3.0.0",
   "meta": {
     "author": "BikramBiswas786",
     "source": "https://github.com/BikramBiswas786/nym-proxy-mvp"
@@ -16,7 +16,7 @@
       "url": {
         "title": "Target URL",
         "type": "string",
-        "description": "The website URL to proxy through Nym",
+        "description": "The website URL to fetch",
         "editor": "textfield",
         "isRequired": true
       },
@@ -48,12 +48,6 @@
         "default": 120000,
         "minimum": 5000,
         "maximum": 300000
-      },
-      "useMixnet": {
-        "title": "Use Nym Mixnet",
-        "type": "boolean",
-        "description": "Route through Nym 5-hop mixnet for maximum privacy (slower but more private)",
-        "default": true
       }
     },
     "required": ["url"]
