@@ -10,20 +10,36 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static('public'));
 
-// Redis client for persistent storage
+// Redis Upstash REST API client
 class RedisClient {
   constructor(url) {
+    // Extract base URL and token from Upstash REST URL
+    // URL format: https://[token]@[host]:[port]
     this.url = url;
   }
 
   async set(key, value, exSeconds = 86400) {
     try {
-      const response = await fetch(`${this.url}/set/${ke}?=?EX=${exSeconds}`, {
+      const response = await fetch(`${this.url}/set/${key}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify([key, JSON.stringify(value)]),
+      });
+      
+      if (!response.ok) {
+        console.error(`Redis SET failed: ${response.status}`);
+        return false;
+      }
+      
+      // Set expiration
+      await fetch(`${this.url}/expire/${key}/${exSeconds}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(value),
       });
-      return response.ok;
+      
+      return true;
     } catch (e) {
       console.error('Redis SET error:', e.message);
       return false;
@@ -34,7 +50,15 @@ class RedisClient {
     try {
       const response = await fetch(`${this.url}/get/${key}`);
       if (!response.ok) return null;
-      return await response.json();
+      
+      const data = await response.json();
+      if (!data || !data.result) return null;
+      
+      try {
+        return JSON.parse(data.result);
+      } catch {
+        return data.result;
+      }
     } catch (e) {
       console.error('Redis GET error:', e.message);
       return null;
@@ -52,7 +76,7 @@ app.get('/v1/health', async (req, res) => {
       uptime: process.uptime(),
       timestamp: new Date().toISOString(),
       proxy: 'cloud',
-      message: 'Nym Privacy Proxy Cloud Edition'
+      message: 'Cloud Proxy - Fast & Secure'
     });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -101,11 +125,14 @@ app.post('/v1/proxy', async (req, res) => {
       timestamp: Date.now(),
       expiresAt: Date.now() + (24 * 60 * 60 * 1000) // 24 hours
     };
-
-    await redis.set(token, resultWithMeta, 86400); // 24 hours in seconds
+    
+    const stored = await redis.set(token, resultWithMeta, 86400);
+    if (!stored) {
+      console.warn('Failed to store in Redis, but continuing...');
+    }
 
     const viewUrl = `${req.protocol}://${req.get('host')}/v1/proxy/${token}`;
-
+    
     res.json({
       success: true,
       token,
