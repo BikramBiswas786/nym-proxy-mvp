@@ -2,26 +2,20 @@ import express from 'express';
 import { ApifyClient } from 'apify-client';
 import { nanoid } from 'nanoid';
 import cors from 'cors';
+import { Redis } from '@upstash/redis';
 
 const app = express();
 const client = new ApifyClient({ token: process.env.APIFY_API_TOKEN });
 
+// Initialize Upstash Redis client
+const redis = new Redis({
+  url: process.env.UPSTASH_REDIS_REST_URL,
+  token: process.env.UPSTASH_REDIS_REST_TOKEN,
+});
+
 app.use(cors());
 app.use(express.json());
 app.use(express.static('public'));
-
-// In-memory store for proxy results (24h expiry)
-const proxyCache = new Map();
-
-// Cleanup expired entries periodically
-setInterval(() => {
-  const now = Date.now();
-  for (const [key, value] of proxyCache.entries()) {
-    if (value.expiresAt < now) {
-      proxyCache.delete(key);
-    }
-  }
-}, 60 * 60 * 1000); // Every hour
 
 // GET /v1/health - Health check
 app.get('/v1/health', async (req, res) => {
@@ -46,8 +40,7 @@ app.post('/v1/proxy', async (req, res) => {
     if (!url) {
       return res.status(400).json({ error: 'URL is required' });
     }
-
-    console.log('\ud83d\ude80 Creating proxy link for:', url);
+    console.log('🚀 Creating proxy link for:', url);
     
     // Validate URL
     try {
@@ -55,7 +48,6 @@ app.post('/v1/proxy', async (req, res) => {
     } catch {
       return res.status(400).json({ error: 'Invalid URL format' });
     }
-
     // Call Apify actor to fetch the URL
     const run = await client.actor('integrative_operative/my-actor').call({
       url,
@@ -64,25 +56,25 @@ app.post('/v1/proxy', async (req, res) => {
       body: body || undefined,
       timeoutMs: Math.min(timeoutMs, 120000)
     });
-
+    
     // Get dataset results
     const { items } = await client.dataset(run.defaultDatasetId).listItems();
     const result = items[0];
-
+    
     if (!result) {
       return res.status(500).json({ error: 'Actor produced no results' });
     }
-
-    // Generate token and store in memory cache
+    
+    // Generate token and store in Redis with 24h expiry
     const token = nanoid(10);
     const cacheEntry = {
       ...result,
       timestamp: Date.now(),
-      expiresAt: Date.now() + (24 * 60 * 60 * 1000) // 24 hours
     };
     
-    proxyCache.set(token, cacheEntry);
-
+    // Store in Redis with 24 hour expiry (86400 seconds)
+    await redis.setex(`proxy:${token}`, 86400, JSON.stringify(cacheEntry));
+    
     const viewUrl = `${req.protocol}://${req.get('host')}/v1/proxy/${token}`;
     
     res.json({
@@ -95,7 +87,7 @@ app.post('/v1/proxy', async (req, res) => {
       originalUrl: result.originalUrl
     });
   } catch (error) {
-    console.error('\u274c Proxy error:', error.message);
+    console.error('❌ Proxy error:', error.message);
     res.status(500).json({ error: error.message });
   }
 });
@@ -104,18 +96,16 @@ app.post('/v1/proxy', async (req, res) => {
 app.get('/v1/proxy/:token', async (req, res) => {
   try {
     const { token } = req.params;
-    const result = proxyCache.get(token);
-
-    if (!result) {
+    
+    // Get from Redis
+    const cachedData = await redis.get(`proxy:${token}`);
+    
+    if (!cachedData) {
       return res.status(404).json({ error: 'Proxy result not found or expired' });
     }
-
-    // Check if expired
-    if (Date.now() > result.expiresAt) {
-      proxyCache.delete(token);
-      return res.status(404).json({ error: 'Proxy result expired' });
-    }
-
+    
+    const result = JSON.parse(cachedData);
+    
     // Serve HTML with URL rewriting
     let html = result.body || '';
     
@@ -129,11 +119,11 @@ app.get('/v1/proxy/:token', async (req, res) => {
         .replace(/src="\/(\w[^"]*)"/g, `src="${baseUrl}/$1"`)
         .replace(/url\(\/(\w[^)]*)/g, `url(${baseUrl}/$1`);
     }
-
+    
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
     res.send(html);
   } catch (error) {
-    console.error('\u274c GET proxy error:', error.message);
+    console.error('❌ GET proxy error:', error.message);
     res.status(500).json({ error: error.message });
   }
 });
