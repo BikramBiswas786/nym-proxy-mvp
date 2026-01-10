@@ -114,6 +114,23 @@ app.get('/p/:token', async (req, res) => {
   }
 });
 
+// GET /v1/proxy endpoint for quick proxy token generation (query parameter style)
+app.get('/v1/proxy', async (req, res) => {
+  try {
+    const { url, mode } = req.query || {};
+    const v = await validateUrlAndHost(url);
+    const token = makeToken();
+    const key = `token:${token}`;
+    const payload = { url: v.url, mode: mode || 'apify', createdAt: Date.now() };
+    await redis.set(key, JSON.stringify(payload), { ex: parseInt(process.env.TOKEN_TTL || '86400', 10) });
+    const proxyUrl = `${req.protocol}://${req.get('host')}/p/${token}`;
+    return res.json({ token, proxyUrl });
+  } catch (e) {
+    return res.status(400).json({ error: e.message });
+  }
+});
+
+
 app.get('/v1/health', (req, res) => res.json({ status: 'ok' }));
 
 const PORT = process.env.PORT || 8080;
