@@ -1,7 +1,7 @@
 const APIFY_TOKEN = process.env.APIFY_TOKEN;
 
 export default async function handler(req, res) {
-  const { url } = req.body || {};
+  const { url } = req.body || req.query || {};
   
   // Handle GET requests for health check
   if (req.method === 'GET' && req.url === '/v1/health') {
