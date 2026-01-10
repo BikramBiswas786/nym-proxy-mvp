@@ -8,11 +8,13 @@ export class TransportAdapter {
 
 export class ApifyTransport extends TransportAdapter {
   async fetch(url, opts = {}) {
+    // Simple fetch implementation - no external Apify actor call
+    // URL is passed directly to fetch for direct HTTP/HTTPS proxy
     return fetch(url, opts);
   }
 }
 
-export class Socks5Transport extends TransportAdapter {
+export class SocksTransport extends TransportAdapter {
   constructor(socksUrl) {
     super();
     if (!socksUrl) throw new Error('missing socks url');
@@ -22,4 +24,3 @@ export class Socks5Transport extends TransportAdapter {
     const merged = { ...opts, agent: this.agent };
     return fetch(url, merged);
   }
-}
