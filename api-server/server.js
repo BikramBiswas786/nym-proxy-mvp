@@ -4,7 +4,9 @@ import crypto from 'crypto';
 
 const app = express();
 const proxyCache = new Map();
+const APIFY_TOKEN = process.env.APIFY_TOKEN;
 
+// Cache cleanup
 setInterval(() => {
   const now = Date.now();
   for (const [key, value] of proxyCache.entries()) {
@@ -36,6 +38,60 @@ function isDexSite(url) {
   } catch { return false; }
 }
 
+async function renderWithApify(url) {
+  if (!APIFY_TOKEN) throw new Error('APIFY_TOKEN not configured');
+  
+  const input = {
+    startUrls: [{ url }],
+    maxRequestsPerCrawl: 1,
+    pageFunction: `
+      return {
+        title: document.title,
+        html: document.documentElement.outerHTML,
+        status: 200
+      };
+    `
+  };
+
+  const runEndpoint = `https://api.apify.com/v2/acts/apify~web-scraper/runs?token=${APIFY_TOKEN}`;
+  const runResponse = await fetch(runEndpoint, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+    timeout: 90000
+  });
+
+  if (!runResponse.ok) throw new Error(`Apify error: ${runResponse.status}`);
+  const runData = await runResponse.json();
+  const runId = runData.data.id;
+
+  // Poll for results
+  let attempts = 0;
+  while (attempts < 60) {
+    const statusResponse = await fetch(
+      `https://api.apify.com/v2/acts/apify~web-scraper/runs/${runId}?token=${APIFY_TOKEN}`
+    );
+    const statusData = await statusResponse.json();
+
+    if (statusData.data.status === 'SUCCEEDED') {
+      const resultsResponse = await fetch(
+        `https://api.apify.com/v2/acts/apify~web-scraper/runs/${runId}/dataset/items?token=${APIFY_TOKEN}`
+      );
+      const results = await resultsResponse.json();
+      if (results && results.length > 0 && results[0].html) {
+        return results[0].html;
+      }
+      break;
+    }
+
+    if (statusData.data.status === 'FAILED') throw new Error('Apify run failed');
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    attempts++;
+  }
+
+  throw new Error('Apify timeout');
+}
+
 app.use(cors());
 app.use(express.json({ limit: '25mb' }));
 app.use(express.static('public'));
@@ -43,6 +99,7 @@ app.use(express.static('public'));
 app.get('/v1/health', (req, res) => {
   res.json({
     status: 'ok',
+    apify: APIFY_TOKEN ? 'configured' : 'missing APIFY_TOKEN',
     cache: proxyCache.size,
     memory: Math.round(process.memoryUsage().heapUsed / 1024 / 1024),
     crypto_dex_support: Array.from(CRYPTO_DEX_SITES)
@@ -52,27 +109,40 @@ app.get('/v1/health', (req, res) => {
 app.post('/v1/proxy', async (req, res) => {
   const { url } = req.body;
   const startTime = Date.now();
+
   try {
     try { new URL(url); } catch { return res.status(400).json({ error: 'Invalid URL' }); }
 
     const isDex = isDexSite(url);
     console.log(`[Proxy] Fetching: ${url} (DEX: ${isDex})`);
 
-    const response = await fetch(url, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-        'Accept-Language': 'en-US,en;q=0.9',
-        'Cache-Control': 'no-cache'
-      },
-      redirect: 'follow',
-      timeout: 20000
-    });
+    let html;
+    if (isDex && APIFY_TOKEN) {
+      try {
+        console.log(`[DEX] Using Apify for ${url}`);
+        html = await renderWithApify(url);
+      } catch (apifyErr) {
+        console.warn(`[Apify Failed] Falling back to standard fetch: ${apifyErr.message}`);
+        const r = await fetch(url, {
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+          },
+          timeout: 15000
+        });
+        html = await r.text();
+      }
+    } else {
+      const r = await fetch(url, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+        },
+        timeout: 15000
+      });
+      html = await r.text();
+    }
 
-    const html = await response.text();
     const duration = Date.now() - startTime;
     const token = crypto.randomBytes(16).toString('hex');
-
     proxyCache.set(token, {
       html,
       isDex,
@@ -112,6 +182,7 @@ app.get('/v1/proxy/view/:token', (req, res) => {
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`✓ Cloud Proxy Ready`);
-  console.log(`✓ Support: 5 Crypto DEX Platforms`);
+  console.log(`✓ Support: 10 Crypto DEX Platforms`);
+  console.log(`✓ Apify: ${APIFY_TOKEN ? 'Enabled' : 'Disabled'}`);
   console.log(`✓ Port: ${PORT}\n`);
 });
