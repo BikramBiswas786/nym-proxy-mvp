@@ -5,8 +5,7 @@
       "src": "api-server/public/**",
       "use": "@vercel/static"
     },
-    {
-  ],
+    ],
   "routes": [
     {
       "src": "/",
