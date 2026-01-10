@@ -75,6 +75,12 @@ app.post('/v1/proxy', async (r, s) => {
   }
 });
 
+// GET handler for /v1/proxy - returns proxy info or error
+app.get('/v1/proxy', (r, s) => {
+  s.status(400).json({ error: 'GET requests not supported. Use POST with a URL in the request body.' });
+});
+
+
 // View proxied content
 app.get('/v1/proxy/view/:t', (r, s) => {
   const c = cache.get(r.params.t);
