@@ -181,3 +181,8 @@ app.get('/v1/proxy/view/:token', (req, res) => {
 
 
 export default app;
+
+// Catch-all for undefined routes
+app.use((req, res) => {
+  res.status(404).json({ error: 'Not found' });
+});
