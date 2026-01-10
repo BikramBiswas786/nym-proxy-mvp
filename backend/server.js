@@ -16,6 +16,15 @@ const app = express();
 app.use(helmet());
 app.use(express.json({ limit: '2mb' }));
 
+// Enable CORS
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  if (req.method === 'OPTIONS') return res.sendStatus(200);
+  next();
+});
+
 // Upstash redis
 const redis = new Redis({ url: process.env.UPSTASH_REST_URL, token: process.env.UPSTASH_REST_TOKEN });
 
@@ -129,6 +138,22 @@ app.get('/v1/proxy', async (req, res) => {
     return res.status(400).json({ error: e.message });
   }
 });
+
+// POST /v1/proxy - for creating proxy tokens (matches frontend expectations)
+app.post('/v1/proxy', async (req, res) => {
+  try {
+    const { url, mode } = req.body || {};
+    const v = await validateUrlAndHost(url);
+    const token = makeToken();
+    const key = `token:${token}`;
+    const payload = { url: v.url, mode: mode || 'apify', createdAt: Date.now() };
+    await redis.set(key, JSON.stringify(payload), { ex: parseInt(process.env.TOKEN_TTL || '86400', 10) });
+    return res.json({ success: true, token, size: 0, duration: 0 });
+  } catch (e) {
+    return res.status(400).json({ error: e.message });
+  }
+});
+
 
 
 app.get('/v1/health', (req, res) => res.json({ status: 'ok' }));
