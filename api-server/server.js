@@ -1,6 +1,7 @@
 import express from 'express';
 import cors from 'cors';
-import crypto from 'crypto';
+import crypto from 'crypto';;
+import puppeteer from 'puppeteer'
 
 const app = express();
 
@@ -22,7 +23,53 @@ setInterval(cleanupExpiredEntries, 10 * 60 * 1000);
 
 // ========== Configuration ==========
 const CONTENT_TTL_SECONDS = 72 * 60 * 60; // 72 hours
-const CONTENT_TTL_MS = CONTENT_TTL_SECONDS * 1000;
+const CONTENT_TTL_MS = CONTENT_TTL_SECONDS * 1000;;
+
+// ========== Crypto DEX Detection ==========
+const CRYPTO_DEX_SITES = [
+  'uniswap.org',
+  'pancakeswap.finance',
+  'raydium.io',
+  'curve.fi',
+  'aave.com',
+  '1inch.io',
+  'sushiswap.fi',
+  'dex.guru',
+  'kyberswap.com',
+  'quickswap.exchange'
+];
+
+function isCryptoDexSite(url) {
+  try {
+    const urlObj = new URL(url);
+    const hostname = urlObj.hostname.replace('www.', '');
+    return CRYPTO_DEX_SITES.some(dex => hostname.includes(dex.replace('www.', '')));
+  } catch {
+    return false;
+  }
+}
+
+// ========== Puppeteer Render Function ==========
+async function renderPageWithPuppeteer(url, timeoutMs = 30000) {
+  let browser;
+  try {
+    browser = await puppeteer.launch({
+      headless: 'new',
+      args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
+    });
+    const page = await browser.newPage();
+    await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36');
+    const response = await page.goto(url, { waitUntil: 'networkidle2', timeout: timeoutMs });
+    const html = await page.content();
+    const headers = {}; 
+    return { html, status: response?.status() || 200, headers };
+  } catch (err) {
+    console.error('Puppeteer rendering error:', err.message);
+    throw err;
+  } finally {
+    if (browser) await browser.close();
+  }
+}
 
 // ========== Express Setup ==========
 app.use(cors());
@@ -79,7 +126,17 @@ app.post('/v1/proxy', async (req, res) => {
 
     let response;
     try {
+      // Check if crypto DEX site - use Puppeteer for JS rendering
+    let body_text;
+    if (isCryptoDexSite(url)) {
+      console.log(`[Puppeteer] Rendering crypto DEX site: ${url}`);
+      const rendered = await renderPageWithPuppeteer(url, timeoutMs);
+      body_text = rendered.html;
+      response = { status: () => rendered.status, url };
+    } else {
       response = await fetch(url, { ...opts, signal: controller.signal });
+      body_text = await response.text();
+    }
     } finally {
       clearTimeout(id);
     }
