@@ -1,83 +1,126 @@
+import crypto from 'crypto';
+
 const APIFY_TOKEN = process.env.APIFY_TOKEN;
 
 export default async function handler(req, res) {
-  const { url } = req.body || req.query || {};
+  // Add CORS headers for all responses
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'POST, GET, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
   
-  // Handle GET requests for health check
-  if (req.method === 'GET' && req.url === '/v1/health') {
-    return res.status(200).json({ status: 'ok', apify: APIFY_TOKEN ? 'configured' : 'missing' });
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
   }
 
-  if (!url) {
-    return res.status(400).json({ error: 'URL is required' });
+  // Route: GET /v1/health or /health
+  if (req.method === 'GET' && (req.url === '/v1/health' || req.url === '/health')) {
+    return res.status(200).json({ 
+      status: 'ok', 
+      apify: APIFY_TOKEN ? 'configured' : 'missing',
+      timestamp: new Date().toISOString()
+    });
   }
 
-  try {
-    // Call Apify Web Scraper Actor
-    const input = {
-      startUrls: [{ url }],
-      maxRequestsPerCrawl: 1,
-      pageFunction: `
-        return {
-          title: document.title,
-          html: document.documentElement.outerHTML,
-          status: 200
-        };
-      `
-    };
-
-    const runResponse = await fetch(
-      `https://api.apify.com/v2/acts/apify~web-scraper/runs?token=${APIFY_TOKEN}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(input)
-      }
-    );
-
-    if (!runResponse.ok) {
-      throw new Error(`Apify error: ${runResponse.status}`);
+  // Route: POST /api/proxy - Simple token generation for crypto DEX proxy
+  if (req.method === 'POST' && req.url === '/api/proxy') {
+    const { url } = req.body || {};
+    
+    if (!url) {
+      return res.status(400).json({ error: 'URL is required' });
     }
 
-    const runData = await runResponse.json();
-    const runId = runData.data.id;
+    try {
+      // Validate URL format
+      new URL(url);
+      
+      // Generate unique token for this proxy session
+      const token = crypto.randomBytes(16).toString('hex');
+      
+      return res.status(200).json({
+        success: true,
+        token: token,
+        size: 0,
+        duration: 0
+      });
+    } catch (error) {
+      if (error instanceof TypeError) {
+        return res.status(400).json({ error: 'Invalid URL format' });
+      }
+      return res.status(500).json({ error: error.message });
+    }
+  }
 
-    // Poll for results
-    let attempts = 0;
-    while (attempts < 60) {
-      const statusResponse = await fetch(
-        `https://api.apify.com/v2/acts/apify~web-scraper/runs/${runId}?token=${APIFY_TOKEN}`
-      );
-      const statusData = await statusResponse.json();
+  // Route: POST /v1/proxy or /proxy - Full Apify scraping
+  if ((req.method === 'POST' && req.url === '/proxy') || req.url === '/v1/proxy') {
+    const { url } = req.body || req.query || {};
+    
+    if (!url) {
+      return res.status(400).json({ error: 'URL is required' });
+    }
 
-      if (statusData.data.status === 'SUCCEEDED') {
-        const resultsResponse = await fetch(
-          `https://api.apify.com/v2/acts/apify~web-scraper/runs/${runId}/dataset/items?token=${APIFY_TOKEN}`
-        );
-        const results = await resultsResponse.json();
-        
-        if (results && results.length > 0) {
-          return res.status(200).json({
-            success: true,
-            html: results[0].html,
-            title: results[0].title,
-            duration: Date.now() - Date.now()
-          });
+    if (!APIFY_TOKEN) {
+      return res.status(500).json({ error: 'Apify configuration missing' });
+    }
+
+    try {
+      // Validate URL format
+      new URL(url);
+      
+      // Create Apify task payload
+      const input = {
+        startUrls: [{ url }],
+        maxRequestsPerCrawl: 1,
+        pageFunction: `
+          return {
+            title: document.title,
+            html: document.documentElement.outerHTML,
+            status: 200
+          };
+        `
+      };
+
+      // Call Apify Web Scraper
+      const runResponse = await fetch(
+        `https://api.apify.com/v2/acts/apify~web-scraper/runs?token=${APIFY_TOKEN}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(input),
+          timeout: 30000
         }
-        break;
+      );
+
+      if (!runResponse.ok) {
+        const errorText = await runResponse.text();
+        console.error('[Apify Error]', runResponse.status, errorText);
+        
+        if (runResponse.status === 401 || runResponse.status === 403) {
+          return res.status(401).json({ error: 'Unauthorized: Invalid Apify token' });
+        }
+        throw new Error(`Apify API error: ${runResponse.status}`);
       }
 
-      if (statusData.data.status === 'FAILED') {
-        throw new Error('Apify run failed');
-      }
+      const runData = await runResponse.json();
+      const runId = runData.data.id;
+      
+      return res.status(200).json({
+        success: true,
+        token: `${runId}:${Date.now()}`,
+        size: 0,
+        duration: 0
+      });
 
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      attempts++;
+    } catch (error) {
+      console.error('[Proxy Error]', error.message);
+      
+      if (error instanceof TypeError) {
+        return res.status(400).json({ error: 'Invalid URL format' });
+      }
+      
+      return res.status(500).json({ error: error.message });
     }
-
-    return res.status(500).json({ error: 'Apify timeout' });
-  } catch (error) {
-    console.error('[Error]', error.message);
-    return res.status(500).json({ error: error.message });
   }
+
+  // Default response for unknown routes
+  return res.status(404).json({ error: 'Not Found' });
 }
