@@ -1,10 +1,20 @@
 import express from 'express';
 import cors from 'cors';
 import crypto from 'crypto';
-import path from 'path';
+import { readFileSync } from 'fs';
+import { join } from 'path';
 
 const app = express();
 const cache = new Map();
+
+// Load index.html
+let indexHtml;
+try {
+  indexHtml = readFileSync(join(process.cwd(), 'public', 'index.html'), 'utf-8');
+} catch (e) {
+  console.warn('Could not load index.html:', e.message);
+  indexHtml = '<html><body>Cloud Proxy</body></html>';
+}
 
 // Cleanup expired cache entries every 10 minutes
 setInterval(() => {
@@ -85,7 +95,7 @@ app.get('/v1/proxy/view/:t', (r, s) => {
 
 // Serve frontend for all other GET requests
 app.get('*', (r, s) => {
-  s.sendFile(path.join(process.cwd(), 'public', 'index.html'));
+  s.type('text/html').send(indexHtml);
 });
 
 export default app;
