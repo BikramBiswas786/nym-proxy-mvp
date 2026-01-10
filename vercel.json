@@ -6,9 +6,6 @@
       "use": "@vercel/static"
     },
     {
-      "src": "api-server/server.js",
-      "use": "@vercel/node"
-    }
   ],
   "routes": [
     {
@@ -17,15 +14,13 @@
     },
     {
       "src": "/v1/(.*)",
-      "dest": "/api-server/server.js"
-    },
+"/api/index.js"    },
     {
       "src": "/(.*\\.(css|js|png|jpg|jpeg|gif|svg|ico))",
       "dest": "/api-server/public/$1"
     },
     {
       "src": "/(.*)",
-      "dest": "/api-server/server.js"
-    }
+"/api/index.js"    }
   ]
 }
