@@ -1,13 +1,4 @@
 {
   "version": 2,
-  "routes": [
-    {
-      "src": "/api(.*)",
-      "dest": "/api/index.js"
-    },
-    {
-      "src": "/(.*)",
-      "dest": "/api-server/public/index.html"
-    }
-  ]
+  "public": "api-server/public"
 }
