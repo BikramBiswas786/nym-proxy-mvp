@@ -1,11 +1,12 @@
 import express from 'express';
 import cors from 'cors';
 import crypto from 'crypto';
-import { chromium } from 'playwright';
 
 const app = express();
 const proxyCache = new Map();
+const APIFY_TOKEN = process.env.APIFY_TOKEN;
 
+// Cleanup
 setInterval(() => {
   const now = Date.now();
   for (const [key, value] of proxyCache.entries()) {
@@ -14,17 +15,13 @@ setInterval(() => {
 }, 5 * 60 * 1000);
 
 const CONTENT_TTL_MS = 6 * 60 * 60 * 1000;
+
 const CRYPTO_DEX_SITES = {
   'uniswap.org': true,
   'pancakeswap.finance': true,
   'raydium.io': true,
   'curve.fi': true,
-  'aave.com': true,
-  '1inch.io': true,
-  'sushiswap.fi': true,
-  'dex.guru': true,
-  'kyberswap.com': true,
-  'quickswap.exchange': true
+  'aave.com': true
 };
 
 function isDexSite(url) {
@@ -34,17 +31,64 @@ function isDexSite(url) {
   } catch { return false; }
 }
 
-async function renderWithPlaywright(url) {
-  let browser;
+async function renderWithApify(url) {
   try {
-    browser = await chromium.launch({ headless: true });
-    const page = await browser.newPage();
-    await page.goto(url, { waitUntil: 'networkidle', timeout: 30000 });
-    const html = await page.content();
-    await browser.close();
-    return html;
+    const input = {
+      startUrls: [{ url }],
+      maxRequestsPerCrawl: 1,
+      pageFunction: `
+        return {
+          title: document.title,
+          html: document.documentElement.outerHTML,
+          status: 200
+        };
+      `
+    };
+
+    const runEndpoint = `https://api.apify.com/v2/acts/apify~web-scraper/runs?token=${APIFY_TOKEN}`;
+    const runResponse = await fetch(runEndpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(input),
+      timeout: 90000
+    });
+
+    if (!runResponse.ok) {
+      throw new Error(`Apify API error: ${runResponse.status}`);
+    }
+
+    const runData = await runResponse.json();
+    const runId = runData.data.id;
+
+    // Get results
+    let attempts = 0;
+    while (attempts < 60) {
+      const statusResponse = await fetch(
+        `https://api.apify.com/v2/acts/apify~web-scraper/runs/${runId}?token=${APIFY_TOKEN}`
+      );
+      const statusData = await statusResponse.json();
+
+      if (statusData.data.status === 'SUCCEEDED') {
+        const resultsResponse = await fetch(
+          `https://api.apify.com/v2/acts/apify~web-scraper/runs/${runId}/dataset/items?token=${APIFY_TOKEN}`
+        );
+        const results = await resultsResponse.json();
+        if (results && results.length > 0 && results[0].html) {
+          return results[0].html;
+        }
+        break;
+      }
+      if (statusData.data.status === 'FAILED') {
+        throw new Error('Apify run failed');
+      }
+
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      attempts++;
+    }
+
+    throw new Error('Apify timeout');
   } catch (err) {
-    if (browser) await browser.close();
+    console.error('[Apify Error]', err.message);
     throw err;
   }
 }
@@ -54,7 +98,12 @@ app.use(express.json({ limit: '25mb' }));
 app.use(express.static('public'));
 
 app.get('/v1/health', (req, res) => {
-  res.json({ status: 'ok', cache: proxyCache.size, memory: Math.round(process.memoryUsage().heapUsed / 1024 / 1024) });
+  res.json({
+    status: 'ok',
+    apify: APIFY_TOKEN ? 'configured' : 'missing APIFY_TOKEN',
+    cache: proxyCache.size,
+    memory: Math.round(process.memoryUsage().heapUsed / 1024 / 1024)
+  });
 });
 
 app.post('/v1/proxy', async (req, res) => {
@@ -67,8 +116,11 @@ app.post('/v1/proxy', async (req, res) => {
     let html;
 
     if (isDex) {
-      console.log(`[DEX RENDER] ${url}`);
-      html = await renderWithPlaywright(url);
+      if (!APIFY_TOKEN) {
+        return res.status(500).json({ error: 'APIFY_TOKEN not set' });
+      }
+      console.log(`[DEX] Rendering ${url}`);
+      html = await renderWithApify(url);
     } else {
       const r = await fetch(url, {
         headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
@@ -96,7 +148,6 @@ app.post('/v1/proxy', async (req, res) => {
       viewUrl: `/v1/proxy/view/${token}`
     });
   } catch (err) {
-    console.error('[Error]', err.message);
     res.status(500).json({ error: err.message });
   }
 });
@@ -108,13 +159,15 @@ app.get('/v1/proxy/view/:token', (req, res) => {
   const cached = proxyCache.get(token);
   if (!cached || Date.now() > cached.expiresAt) {
     if (cached) proxyCache.delete(token);
-    return res.status(404).json({ error: 'Expired or not found' });
+    return res.status(404).json({ error: 'Expired' });
   }
 
   res.setHeader('Content-Type', 'text/html;charset=utf-8');
-  res.setHeader('X-Proxy', 'DEX-Render');
+  res.setHeader('X-Proxy', 'Apify');
   res.send(cached.html);
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`✓ Cloud Proxy DEX Ready on ${PORT}`));
+app.listen(PORT, () => {
+  console.log(`✓ Cloud Proxy DEX - Ready\n✓ Apify: ${APIFY_TOKEN ? 'ENABLED' : 'DISABLED'}\n✓ 5 Crypto DEX Platforms\n`);
+});
