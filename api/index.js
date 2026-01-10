@@ -2,6 +2,11 @@ const APIFY_TOKEN = process.env.APIFY_TOKEN;
 
 export default async function handler(req, res) {
   const { url } = req.body || {};
+  
+  // Handle GET requests for health check
+  if (req.method === 'GET' && req.url === '/v1/health') {
+    return res.status(200).json({ status: 'ok', apify: APIFY_TOKEN ? 'configured' : 'missing' });
+  }
 
   if (!url) {
     return res.status(400).json({ error: 'URL is required' });
