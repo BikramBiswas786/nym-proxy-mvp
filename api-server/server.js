@@ -1,6 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import crypto from 'crypto';
+import path from 'path';
 
 const app = express();
 const cache = new Map();
@@ -53,7 +54,6 @@ app.post('/v1/proxy', async (r, s) => {
     let html = await res.text();
     
     // Inject base href to fix relative URLs
-    const urlObj = new URL(url);
     const baseHref = `<base href="${url}" />`;
     html = html.replace(/<head[^>]*>/i, match => `${match}${baseHref}`);
     
@@ -81,6 +81,11 @@ app.get('/v1/proxy/view/:t', (r, s) => {
     return s.status(404).json({ error: 'Token expired or not found' });
   }
   s.type('text/html').send(c.h);
+});
+
+// Serve frontend for all other GET requests
+app.get('*', (r, s) => {
+  s.sendFile(path.join(process.cwd(), 'public', 'index.html'));
 });
 
 export default app;
