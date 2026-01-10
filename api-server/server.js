@@ -1,22 +1,28 @@
 import express from 'express';
 import cors from 'cors';
 import crypto from 'crypto';
-import { Redis } from '@upstash/redis';
 
 const app = express();
 
-// ========== Redis Configuration ==========
-// Initialize Redis client from Upstash
-const redis = new Redis({
-  url: process.env.UPSTASH_REDIS_REST_URL,
-  token: process.env.UPSTASH_REDIS_REST_TOKEN,
-});
+// ========== Storage: In-Memory Map (Primary) ==========
+const proxyCache = new Map();
 
-// Content retention: 72 hours in seconds
-const CONTENT_TTL_SECONDS = 72 * 60 * 60;
+// Helper to clean up expired entries
+const cleanupExpiredEntries = () => {
+  const now = Date.now();
+  for (const [key, value] of proxyCache.entries()) {
+    if (now > value.expiresAt) {
+      proxyCache.delete(key);
+    }
+  }
+};
 
-// Helper to build Redis key
-const keyForToken = (token) => `proxy:${token}`;
+// Run cleanup every 10 minutes
+setInterval(cleanupExpiredEntries, 10 * 60 * 1000);
+
+// ========== Configuration ==========
+const CONTENT_TTL_SECONDS = 72 * 60 * 60; // 72 hours
+const CONTENT_TTL_MS = CONTENT_TTL_SECONDS * 1000;
 
 // ========== Express Setup ==========
 app.use(cors());
@@ -24,27 +30,16 @@ app.use(express.json({ limit: '15mb' }));
 app.use(express.static('public'));
 
 // ========== Health Check ==========
-app.get('/v1/health', async (req, res) => {
-  try {
-    const ping = await redis.ping();
-    res.json({
-      status: 'ok',
-      proxy: 'cloud',
-      uptime: process.uptime(),
-      redis: ping === 'PONG' ? 'connected' : 'error',
-      timestamp: new Date().toISOString(),
-    });
-  } catch (e) {
-    console.error('Health check Redis error:', e.message);
-    res.status(503).json({
-      status: 'degraded',
-      proxy: 'cloud',
-      uptime: process.uptime(),
-      redis: 'unreachable',
-      error: e.message,
-      timestamp: new Date().toISOString(),
-    });
-  }
+app.get('/v1/health', (req, res) => {
+  res.json({
+    status: 'ok',
+    proxy: 'cloud',
+    storage: 'in-memory',
+    uptime: process.uptime(),
+    cached_items: proxyCache.size,
+    ttl_hours: CONTENT_TTL_SECONDS / 3600,
+    timestamp: new Date().toISOString(),
+  });
 });
 
 // ========== Proxy Content Fetcher ==========
@@ -73,7 +68,6 @@ app.post('/v1/proxy', async (req, res) => {
       redirect: 'follow',
     };
 
-    // Add body if not GET
     if (method !== 'GET' && body) {
       opts.body = typeof body === 'string' ? body : JSON.stringify(body);
     }
@@ -106,18 +100,11 @@ app.post('/v1/proxy', async (req, res) => {
       size: body_text.length,
       duration,
       timestamp: new Date().toISOString(),
+      expiresAt: Date.now() + CONTENT_TTL_MS,
     };
 
-    // Store in Redis with TTL
-    try {
-      await redis.set(
-        keyForToken(token),
-        JSON.stringify(data),
-        { ex: CONTENT_TTL_SECONDS }
-      );
-    } catch (redisErr) {
-      console.error('Redis write error:', redisErr.message);
-    }
+    // Store in memory
+    proxyCache.set(token, data);
 
     res.json({
       success: true,
@@ -145,11 +132,11 @@ app.post('/v1/proxy', async (req, res) => {
 });
 
 // ========== View Cached Content ==========
-app.get('/v1/proxy/view/:token', async (req, res) => {
+app.get('/v1/proxy/view/:token', (req, res) => {
   try {
     const { token } = req.params;
 
-    // Validate token format (should be hex string)
+    // Validate token format
     if (!/^[a-f0-9]{32}$/.test(token)) {
       return res.status(400).json({
         error: 'Invalid token format',
@@ -157,19 +144,10 @@ app.get('/v1/proxy/view/:token', async (req, res) => {
       });
     }
 
-    // Retrieve from Redis
-    let raw;
-    try {
-      raw = await redis.get(keyForToken(token));
-    } catch (redisErr) {
-      console.error('Redis read error:', redisErr.message);
-      return res.status(503).json({
-        error: 'Cache service unavailable',
-        message: 'Redis connection failed',
-      });
-    }
+    // Retrieve from cache
+    const cached = proxyCache.get(token);
 
-    if (!raw) {
+    if (!cached) {
       return res.status(404).json({
         error: 'Content not found or expired',
         message: 'The link has expired. Create a new proxy link.',
@@ -178,28 +156,28 @@ app.get('/v1/proxy/view/:token', async (req, res) => {
       });
     }
 
-    let cached;
-    try {
-      cached = JSON.parse(raw);
-    } catch (parseErr) {
-      console.error('JSON parse error:', parseErr.message);
-      return res.status(500).json({
-        error: 'Corrupted cache entry',
-        message: 'Could not parse cached content',
+    // Check expiration
+    if (Date.now() > cached.expiresAt) {
+      proxyCache.delete(token);
+      return res.status(404).json({
+        error: 'Content expired',
+        message: 'The link has expired. Create a new proxy link.',
+        expired: true,
+        action: 'create_new_link',
       });
     }
 
-    // Extract content type from cached headers
+    // Extract content type
     const contentType = (cached.headers && cached.headers['content-type']) || 'text/html;charset=utf-8';
 
     // Set response headers
     res.setHeader('Content-Type', contentType);
-    res.setHeader('X-Proxy', 'Cloud-Redis');
+    res.setHeader('X-Proxy', 'Cloud-Memory');
     res.setHeader('X-Proxy-Version', '2.0');
     res.setHeader('Cache-Control', 'public, max-age=3600');
     res.setHeader('X-Original-URL', cached.url || 'unknown');
 
-    // Send cached body with original status
+    // Send cached body
     res.status(cached.status || 200).send(cached.body);
   } catch (e) {
     console.error('View error:', e.message);
@@ -222,7 +200,8 @@ app.use((err, req, res, next) => {
 // ========== Start Server ==========
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  console.log(`Cloud Proxy (Redis) running on port ${PORT}`);
-  console.log(`Redis TTL: ${CONTENT_TTL_SECONDS / 3600} hours`);
+  console.log(`Cloud Proxy (In-Memory) running on port ${PORT}`);
+  console.log(`Storage: In-Memory Map`);
+  console.log(`Content TTL: ${CONTENT_TTL_SECONDS / 3600} hours`);
   console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
 });
