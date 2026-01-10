@@ -26,7 +26,6 @@ setInterval(() => {
 
 app.use(cors());
 app.use(express.json({ limit: '5mb' }));
-app.use(express.static('public'));
 
 // Health check endpoint
 app.get('/v1/health', (r, s) => s.json({ ok: true }));
@@ -93,8 +92,11 @@ app.get('/v1/proxy/view/:t', (r, s) => {
   s.type('text/html').send(c.h);
 });
 
-// Serve frontend for all other GET requests
-app.get('*', (r, s) => {
+// Serve static files
+app.use(express.static('public'));
+
+// Serve frontend for all other GET requests (catch-all)
+app.use((r, s) => {
   s.type('text/html').send(indexHtml);
 });
 
