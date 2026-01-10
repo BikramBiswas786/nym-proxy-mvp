@@ -179,10 +179,5 @@ app.get('/v1/proxy/view/:token', (req, res) => {
   res.send(cached.html);
 });
 
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`✓ Cloud Proxy Ready`);
-  console.log(`✓ Support: 10 Crypto DEX Platforms`);
-  console.log(`✓ Apify: ${APIFY_TOKEN ? 'Enabled' : 'Disabled'}`);
-  console.log(`✓ Port: ${PORT}\n`);
-});
+
+export default app;
