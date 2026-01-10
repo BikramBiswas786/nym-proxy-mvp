@@ -13,7 +13,7 @@
     },
     {
       "src": "/v1/(.*)",
-      "dest": "/api"
+      "dest": ""/api/index"
     }
   ]
 }
