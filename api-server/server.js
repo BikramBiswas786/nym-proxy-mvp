@@ -1,9 +1,26 @@
 import express from 'express';
 import cors from 'cors';
 import crypto from 'crypto';
+import puppeteer from 'puppeteer';
 
 const app = express();
 const cache = new Map();
+let browser = null;
+
+// Initialize Puppeteer
+async function initBrowser() {
+  if (!browser) {
+    try {
+      browser = await puppeteer.launch({
+        headless: 'new',
+        args: ['--no-sandbox', '--disable-setuid-sandbox']
+      });
+    } catch (e) {
+      console.error('Puppeteer init failed:', e);
+    }
+  }
+  return browser;
+}
 
 // Cleanup expired cache entries every 10 minutes
 setInterval(() => {
@@ -41,11 +58,14 @@ app.post('/v1/proxy', async (r, s) => {
   if (!url) return s.json({ error: 'URL required' });
   
   try {
-    const res = await fetch(url, {
-      headers: { 'User-Agent': 'Mozilla/5.0' },
-      timeout: 20000
-    });
-    const html = await res.text();
+    const b = await initBrowser();
+    if (!b) throw new Error('Browser unavailable');
+    
+    const page = await b.newPage();
+    await page.goto(url, { waitUntil: 'networkidle2', timeout: 30000 });
+    const html = await page.content();
+    await page.close();
+    
     const t = crypto.randomBytes(16).toString('hex');
     cache.set(t, { h: html, exp: Date.now() + 4 * 60 * 60 * 1000 });
     
@@ -58,6 +78,7 @@ app.post('/v1/proxy', async (r, s) => {
       privacyLevel: 'basic'
     });
   } catch (e) {
+    console.error('Proxy error:', e);
     s.json({ error: e.message });
   }
 });
@@ -65,8 +86,8 @@ app.post('/v1/proxy', async (r, s) => {
 // View proxied content
 app.get('/v1/proxy/view/:t', (r, s) => {
   const c = cache.get(r.params.t);
-  if (!c || Date.now() > c.exp) return s.json({ error: 'Expired' });
-  s.set('Content-Type', 'text/html').send(c.h);
+  if (!c || Date.now() > c.exp) return s.status(404).json({ error: 'Expired or not found' });
+  s.type('text/html').send(c.h);
 });
 
 export default app;
