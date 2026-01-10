@@ -27,6 +27,47 @@ app.get('/v1/health', (req, res) => {
   });
 });
 
+// Improved fetch with better error handling
+async function fetchWithRetry(url, maxRetries = 2) {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 45000); // 45 second timeout
+  
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      const response = await fetch(url, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+          'Accept-Language': 'en-US,en;q=0.5',
+          'Accept-Encoding': 'gzip, deflate',
+          'DNT': '1',
+          'Connection': 'keep-alive',
+          'Upgrade-Insecure-Requests': '1'
+        },
+        signal: controller.signal,
+        redirect: 'follow',
+        timeout: 45000
+      });
+      
+      clearTimeout(timeoutId);
+      
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+      
+      return response;
+    } catch (err) {
+      console.error(`[Fetch Attempt ${attempt + 1}] Error:`, err.message);
+      if (attempt < maxRetries) {
+        await new Promise(resolve => setTimeout(resolve, 1000 * (attempt + 1)));
+      } else {
+        clearTimeout(timeoutId);
+        throw err;
+      }
+    }
+  }
+}
+
 app.post('/v1/proxy', async (req, res) => {
   const { url } = req.body;
   const startTime = Date.now();
@@ -41,14 +82,8 @@ app.post('/v1/proxy', async (req, res) => {
 
     console.log(`[Proxy] Fetching: ${url}`);
 
-    // Fetch with standard fetch
-    const fetchResponse = await fetch(url, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-      },
-      timeout: 30000
-    });
-
+    // Fetch with retry logic
+    const fetchResponse = await fetchWithRetry(url, 2);
     let html = await fetchResponse.text();
     const duration = Date.now() - startTime;
 
@@ -71,7 +106,10 @@ app.post('/v1/proxy', async (req, res) => {
 
   } catch (err) {
     console.error('[Error]', err.message);
-    res.status(500).json({ error: err.message });
+    const errorMsg = err.message.includes('AbortError') 
+      ? 'Request timeout - website took too long to respond'
+      : err.message;
+    res.status(500).json({ error: errorMsg });
   }
 });
 
