@@ -10,7 +10,7 @@
     {
       "src": "/",
       "dest": "/api-server/public/index.html"
-    }
+    },
       {
       "src": "/v1(.*)",
       "dest": "/api"
