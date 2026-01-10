@@ -25,7 +25,7 @@
     },
     {
       "src": "^/(.*)$",
-      "dest": "/api-server/public/index.html"
+      "dest": "/api-server/server.js"
     }
   ]
 }
