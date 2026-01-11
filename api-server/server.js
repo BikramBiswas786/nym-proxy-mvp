@@ -272,7 +272,7 @@ const indexHtml = `<!DOCTYPE html>
         <h3>💚 Support This Project</h3>
         <p>Help us keep this tool free for activists and journalists worldwide</p>
         <p><strong>Donate with Crypto:</strong></p>
-        <div class="wallet-address" id="walletAddr">Bitcoin: 1A1z7agoat7uy8w1kL3u7XkpJzZJaKnEWx</div>
+        <div class="wallet-address" id="walletAddr">Bitcoin: 8C1NrYqF8GZ2ZpJ17suZbqP5bZGVMZw43W5isFzAKzTd95rvcpTMYmzQq9ioepWcC7cn1NjSgBe5FHF7qHSEiFMyK5Uwq3n</div>
         <button class="copy-btn" onclick="copyWallet()">Copy Bitcoin Address</button>
         <div class="wallet-address" id="walletAddr2" style="margin-top:15px;">Ethereum: 0x742d35Cc6634C0532925a3b844Bc9e7595f42e24</div>
         <button class="copy-btn" onclick="copyWallet2()">Copy Ethereum Address</button>
