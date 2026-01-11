@@ -80,15 +80,6 @@ app.get('/access/:token', async (req, res) => {
   }
 });
 
-// Cleanup expired links every hour
-setInterval(() => {
-  const now = new Date();
-  for (const [token, data] of proxyLinks) {
-    if (now > new Date(data.expiresAt)) proxyLinks.delete(token);
-  }
-}, 60 * 60 * 1000);
 
-app.use(express.static('public'));
-app.use((req, res) => res.status(404).json({ error: 'Not found', hint: 'POST to /v1/proxy or GET /v1/proxy' }));
 
 export default app;
