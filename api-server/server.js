@@ -3,430 +3,7 @@ import cors from 'cors';
 import crypto from 'crypto';
 
 const app = express();
-const cache = new Map();
-
-// Embedded HTML - Privacy-focused proxy UI
-const indexHtml = `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Privacy Proxy - Bypass Censorship</title>
-  <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body {
-      font-family: 'Segoe UI', Arial, sans-serif;
-      background: linear-gradient(135deg, #1a1a2e, #16213e);
-      min-height: 100vh;
-      padding: 20px;
-      color: #e0e0e0;
-    }
-    .container {
-      max-width: 900px;
-      margin: 0 auto;
-      background: rgba(15, 52, 96, 0.9);
-      border-radius: 12px;
-      box-shadow: 0 20px 60px rgba(0,0,0,0.5);
-      padding: 40px;
-      border: 1px solid #e94560;
-    }
-    .header {
-      text-align: center;
-      margin-bottom: 40px;
-      padding-bottom: 20px;
-      border-bottom: 2px solid #e94560;
-    }
-    .header h1 {
-      font-size: 2.5rem;
-      color: #ff6b6b;
-      margin-bottom: 10px;
-    }
-    .header p {
-      font-size: 1.1rem;
-      color: #b0b0b0;
-    }
-    .section {
-      margin-bottom: 30px;
-    }
-    .section h2 {
-      color: #e94560;
-      font-size: 1.4rem;
-      margin-bottom: 15px;
-      border-bottom: 2px solid #e94560;
-      padding-bottom: 10px;
-    }
-    .feature {
-      background: rgba(0,0,0,0.2);
-      padding: 15px;
-      margin: 10px 0;
-      border-left: 4px solid #e94560;
-      border-radius: 4px;
-      line-height: 1.6;
-    }
-    .input-group {
-      display: flex;
-      gap: 10px;
-      margin: 20px 0;
-    }
-    .url-input {
-      flex: 1;
-      padding: 12px 15px;
-      border: 2px solid #16213e;
-      border-radius: 6px;
-      background: #1a1a2e;
-      color: white;
-      font-size: 1rem;
-    }
-    .url-input:focus {
-      outline: none;
-      border-color: #e94560;
-      box-shadow: 0 0 10px rgba(233, 69, 96, 0.3);
-    }
-    .btn {
-      padding: 12px 30px;
-      border: none;
-      border-radius: 6px;
-      cursor: pointer;
-      font-weight: 600;
-      transition: all 0.3s;
-      font-size: 1rem;
-    }
-    .btn-primary {
-      background: #e94560;
-      color: white;
-    }
-    .btn-primary:hover {
-      background: #ff6b6b;
-      transform: translateY(-2px);
-      box-shadow: 0 5px 15px rgba(233, 69, 96, 0.4);
-    }
-    .message {
-      padding: 15px;
-      border-radius: 6px;
-      margin: 15px 0;
-      display: none;
-    }
-    .message.success {
-      background: #4caf50;
-      color: white;
-      border-left: 4px solid #45a049;
-    }
-    .message.error {
-      background: #f44336;
-      color: white;
-      border-left: 4px solid #d32f2f;
-    }
-    .blocked-sites {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-      gap: 15px;
-      margin: 15px 0;
-    }
-    .site-card {
-      background: rgba(233, 69, 96, 0.1);
-      border: 1px solid #e94560;
-      padding: 15px;
-      border-radius: 6px;
-      text-align: center;
-    }
-    .site-card strong {
-      color: #ff6b6b;
-    }
-    code {
-      background: #000;
-      padding: 2px 6px;
-      border-radius: 3px;
-      color: #90ee90;
-      font-size: 0.9rem;
-    }
-    .warning {
-      background: rgba(255, 193, 7, 0.1);
-      border-left: 4px solid #ffc107;
-      padding: 15px;
-      border-radius: 6px;
-      margin: 15px 0;
-    }
-        .search-section {
-      background: linear-gradient(135deg, rgba(233, 69, 96, 0.15), rgba(255, 107, 107, 0.1));
-      padding: 30px;
-      border-radius: 12px;
-      margin-bottom: 30px;
-      border: 2px solid #e94560;
-    }
-    .search-header {
-      text-align: center;
-      margin-bottom: 20px;
-    }
-    .search-header h2 {
-      color: #ff6b6b;
-      margin-bottom: 10px;
-      font-size: 1.8rem;
-    }
-    .search-group {
-      display: flex;
-      gap: 10px;
-      margin-bottom: 15px;
-    }
-    .search-input {
-      flex: 1;
-      padding: 15px 20px;
-      border: 2px solid #e94560;
-      border-radius: 8px;
-      background: #1a1a2e;
-      color: white;
-      font-size: 1rem;
-      transition: all 0.3s;
-    }
-    .search-input:focus {
-      outline: none;
-      border-color: #ff6b6b;
-      box-shadow: 0 0 15px rgba(233, 69, 96, 0.5);
-      background: #0f3460;
-    }
-    .btn-search {
-      padding: 15px 40px;
-      background: linear-gradient(135deg, #e94560, #ff6b6b);
-      color: white;
-      border: none;
-      border-radius: 8px;
-      cursor: pointer;
-      font-weight: 700;
-      font-size: 1rem;
-      transition: all 0.3s;
-    }
-    .btn-search:hover {
-      transform: translateY(-3px);
-      box-shadow: 0 10px 25px rgba(233, 69, 96, 0.4);
-    }
-    .btn-search:active {
-      transform: scale(0.98);
-    }
-    .loading {
-      display: none;
-      text-align: center;
-      color: #ff6b6b;
-      font-weight: 600;
-    }
-    .donation-section {
-      background: rgba(255, 193, 7, 0.05);
-      border: 2px solid #ffc107;
-      padding: 20px;
-      border-radius: 10px;
-      text-align: center;
-      margin-top: 15px;
-    }
-    .donation-section h3 {
-      color: #ffc107;
-      margin-bottom: 10px;
-      font-size: 1.2rem;
-    }
-    .wallet-address {
-      background: #000;
-      padding: 12px 15px;
-      border-radius: 6px;
-      color: #90ee90;
-      font-family: monospace;
-      font-size: 0.85rem;
-      word-break: break-all;
-      line-height: 1.5;
-      margin: 10px 0;
-      border: 1px solid #ffc107;
-    }
-    .copy-btn {
-      background: #ffc107;
-      color: #000;
-      padding: 8px 20px;
-      border: none;
-      border-radius: 5px;
-      cursor: pointer;
-      font-weight: 600;
-      font-size: 0.9rem;
-      transition: all 0.3s;
-      margin-top: 10px;
-    }
-    .copy-btn:hover {
-      background: #ffed4e;
-      transform: translateY(-2px);
-    }
-    
-  </style>
-</head>
-<body>
-  <div class="container">
-    <div class="header">
-      <h1>🔐 Privacy Proxy</h1>
-      <p>Access blocked content. Protect your privacy. Bypass censorship.</p>
-    </div>
-
-    <div class="search-section">
-      <div class="search-header">
-        <h2>🔍 Access Blocked Content</h2>
-        <p>Enter a website URL to access it privately</p>
-      </div>
-      <div class="search-group">
-        <input type="text" class="search-input" id="targetUrl" placeholder="https://example.com" />
-        <button class="btn-search" onclick="accessContent()">Access Now</button>
-      </div>
-      <div id="loading" class="loading">🔄 Accessing content...</div>
-      <div class="donation-section">
-        <h3>💚 Support This Project</h3>
-        <p>Help us keep this tool free for activists and journalists worldwide</p>
-        <p><strong>Donate with Crypto:</strong></p>
-        <div class="wallet-address" id="walletAddr">Bitcoin: 8C1NrYqF8GZ2ZpJ17suZbqP5bZGVMZw43W5isFzAKzTd95rvcpTMYmzQq9ioepWcC7cn1NjSgBe5FHF7qHSEiFMyK5Uwq3n</div>
-        <button class="copy-btn" onclick="copyWallet()">Copy Bitcoin Address</button>
-        <div class="wallet-address" id="walletAddr2" style="margin-top:15px;">Ethereum: 0x742d35Cc6634C0532925a3b844Bc9e7595f42e24</div>
-        <button class="copy-btn" onclick="copyWallet2()">Copy Ethereum Address</button>
-      </div>
-    </div>
-
-
-    <div class="section">
-      <h2>How It Works</h2>
-      <div class="feature">
-        📡 <strong>Send a POST request</strong> with your target URL to <code>/v1/proxy</code>
-      </div>
-      <div class="feature">
-        🔗 <strong>Example:</strong> POST body: <code>{"url": "https://blocked-site.com"}</code>
-      </div>
-      <div class="feature">
-        🎯 <strong>Get content</strong> with privacy protection and anonymity
-      </div>
-    </div>
-
-    <div class="section">
-      <h2>🚫 Countering Censorship</h2>
-      <p>This tool helps access information in countries where censorship is prevalent:</p>
-      <div class="blocked-sites">
-        <div class="site-card">
-          <strong>China</strong><br>
-          Great Firewall blocks content
-        </div>
-        <div class="site-card">
-          <strong>Iran</strong><br>
-          Heavy internet restrictions
-        </div>
-        <div class="site-card">
-          <strong>Russia</strong><br>
-          Blocks independent media
-        </div>
-        <div class="site-card">
-          <strong>North Korea</strong><br>
-          Extreme content blocking
-        </div>
-        <div class="site-card">
-          <strong>Belarus</strong><br>
-          Limited freedom online
-        </div>
-        <div class="site-card">
-          <strong>Myanmar</strong><br>
-          Government web filtering
-        </div>
-      </div>
-    </div>
-
-    <div class="section">
-      <h2>🛡️ Privacy Features</h2>
-      <div class="feature">
-        ✅ <strong>IP Masking:</strong> Your real IP is hidden from target servers
-      </div>
-      <div class="feature">
-        ✅ <strong>No Logs:</strong> We don't store or log your requests
-      </div>
-      <div class="feature">
-        ✅ <strong>HTTPS Support:</strong> Encrypted connections
-      </div>
-      <div class="feature">
-        ✅ <strong>Metadata Protection:</strong> User agents and headers are sanitized
-      </div>
-    </div>
-
-    <div class="section">
-      <h2>👥 For Activists & Journalists</h2>
-      <div class="feature">
-        💪 <strong>Bypass Government Blocks:</strong> Access news, social media, and communication platforms
-      </div>
-      <div class="feature">
-        📰 <strong>Report Safely:</strong> Send information without exposing your location
-      </div>
-      <div class="feature">
-        🔍 <strong>Research:</strong> Investigate without detection
-      </div>
-      <div class="feature">
-        🤝 <strong>Organize:</strong> Communicate with peers freely
-      </div>
-    </div>
-
-    <div class="warning">
-      ⚠️ <strong>Legal Notice:</strong> Use this tool responsibly. Check your local laws. We're designed for freedom of information, not illegal activities.
-    </div>
-
-    <div id="message" class="message"></div>
-  </div>
-
-  <script>
-    function showMessage(text, type) {
-      const msg = document.getElementById('message');
-      msg.textContent = text;
-      msg.className = 'message ' + type;
-      msg.style.display = 'block';
-      setTimeout(() => { msg.style.display = 'none'; }, 5000);
-    }
-
-        async function accessContent() {
-      const url = document.getElementById('targetUrl').value;
-      if (!url) {
-        showMessage('Please enter a URL', 'error');
-        return;
-      }
-      const loadingDiv = document.getElementById('loading');
-      loadingDiv.style.display = 'block';
-      try {
-        const response = await fetch('/v1/proxy', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ url })
-        });
-        const data = await response.json();
-        if (data.success) {
-          showMessage('✅ Content accessed successfully!', 'success');
-          document.getElementById('targetUrl').value = '';
-        } else {
-          showMessage('❌ Error: ' + (data.error || 'Unknown error'), 'error');
-        }
-      } catch (e) {
-        showMessage('❌ Error accessing content: ' + e.message, 'error');
-      } finally {
-        loadingDiv.style.display = 'none';
-      }
-    }
-    function copyWallet() {
-      const wallet = document.getElementById('walletAddr').textContent.replace('Bitcoin: ', '');
-      navigator.clipboard.writeText(wallet).then(() => {
-        showMessage('✅ Bitcoin address copied!', 'success');
-      }).catch(() => {
-        showMessage('❌ Failed to copy address', 'error');
-      });
-    }
-    function copyWallet2() {
-      const wallet = document.getElementById('walletAddr2').textContent.replace('Ethereum: ', '');
-      navigator.clipboard.writeText(wallet).then(() => {
-        showMessage('✅ Ethereum address copied!', 'success');
-      }).catch(() => {
-        showMessage('❌ Failed to copy address', 'error');
-      });
-    }
-    
-  </script>
-</body>
-</html>`;
-
-// Cleanup expired cache entries every 10 minutes
-setInterval(() => {
-  const now = Date.now();
-  for (const [k, v] of cache) {
-    if (now > v.exp) cache.delete(k);
-  }
-}, 10 * 60 * 1000);
+const proxyLinks = new Map(); // token -> {url, createdAt, expiresAt}
 
 app.use(cors());
 app.use(express.json({ limit: '5mb' }));
@@ -441,76 +18,134 @@ app.get('/v1/status', (req, res) => {
   res.json({
     service: 'Privacy Proxy',
     version: '1.0',
-    privacyFocused: true,
-    noCensorship: true,
-    supportedCountries: ['China', 'Iran', 'Russia', 'Belarus', 'Myanmar', 'North Korea'],
+    mode: 'single-proxy-per-url',
     features: {
       ipMasking: true,
       noLogs: true,
       https: true,
-      metadataProtection: true
+      expirationTime: '24 hours'
     }
   });
 });
 
-// GET /v1/proxy - explains how to use the API
+// GET handler for /v1/proxy - shows usage
 app.get('/v1/proxy', (req, res) => {
   res.status(400).json({
     error: 'Method not allowed',
     message: 'Use POST /v1/proxy with {"url": "https://target-site.com"} in body',
-    hint: 'This is a privacy-focused proxy for accessing censored content'
+    hint: 'You will get back 1 proxy URL with 24-hour expiration'
   });
 });
 
-// POST /v1/proxy - proxy endpoint
+// POST /v1/proxy - Generate proxy URL for blocked site
 app.post('/v1/proxy', async (req, res) => {
   try {
     const { url } = req.body;
-    if (!url) return res.status(400).json({ error: 'URL required' });
-
-    // Check cache
-    if (cache.has(url)) {
-      const cached = cache.get(url);
-      if (Date.now() <= cached.exp) {
-        return res.json({ success: true, cached: true, content: cached.html });
-      }
-      cache.delete(url);
+    
+    if (!url) {
+      return res.status(400).json({ error: 'URL is required' });
     }
 
+    // Validate URL format
     try {
-      const response = await fetch(url, {
-        headers: { 'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) Privacy Proxy v1.0' },
-        timeout: 15000
-      });
-
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      const html = await response.text();
-
-      // Cache for 1 hour
-      const token = crypto.randomBytes(16).toString('hex');
-      cache.set(url, { html, exp: Date.now() + 60 * 60 * 1000, token });
-
-      res.json({
-        success: true,
-        cached: false,
-        content: html,
-        size: html.length,
-        privacy: 'IP masked, no logs kept'
-      });
+      new URL(url);
     } catch (e) {
-      res.status(500).json({ error: e.message });
+      return res.status(400).json({ error: 'Invalid URL format' });
     }
+
+    // Generate unique token
+    const token = crypto.randomBytes(32).toString('hex');
+    const now = new Date();
+    const expiresAt = new Date(now.getTime() + 24 * 60 * 60 * 1000); // 24 hours
+
+    // Store proxy link
+    proxyLinks.set(token, {
+      url,
+      createdAt: now,
+      expiresAt,
+      accessed: false
+    });
+
+    // Return proxy URL
+    res.json({
+      success: true,
+      originalUrl: url,
+      proxyUrl: `https://nym-proxy-backend.vercel.app/access/${token}`,
+      expiresAt: expiresAt.toISOString(),
+      expiresIn: '24 hours',
+      instructions: 'Click the proxy URL to access the blocked site safely and privately'
+    });
   } catch (e) {
     res.status(500).json({ error: 'Server error', details: e.message });
   }
 });
 
+// Access proxy endpoint - serves the proxied content
+app.get('/access/:token', async (req, res) => {
+  try {
+    const { token } = req.params;
+    const proxyData = proxyLinks.get(token);
+
+    // Check if token exists and is valid
+    if (!proxyData) {
+      return res.status(404).json({ error: 'Proxy link expired or invalid' });
+    }
+
+    // Check expiration
+    if (new Date() > new Date(proxyData.expiresAt)) {
+      proxyLinks.delete(token);
+      return res.status(410).json({ error: 'Link has expired. Generate a new one.' });
+    }
+
+    // Fetch the target URL with privacy headers
+    const response = await fetch(proxyData.url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) Privacy-Proxy/1.0',
+        'Accept-Encoding': 'gzip, deflate'
+      },
+      timeout: 15000
+    });
+
+    if (!response.ok) {
+      return res.status(response.status).json({ error: `Target returned ${response.status}` });
+    }
+
+    const contentType = response.headers.get('content-type');
+    const content = await response.text();
+
+    // Mark as accessed
+    proxyData.accessed = true;
+
+    // Return content with privacy headers
+    res.set({
+      'Content-Type': contentType || 'text/html',
+      'X-Privacy-Protected': 'true',
+      'X-IP-Masked': 'true',
+      'Cache-Control': 'no-store'
+    });
+
+    res.send(content);
+  } catch (e) {
+    res.status(500).json({ error: 'Failed to access content', details: e.message });
+  }
+});
+
+// Cleanup expired links every hour
+setInterval(() => {
+  const now = new Date();
+  for (const [token, data] of proxyLinks) {
+    if (now > new Date(data.expiresAt)) {
+      proxyLinks.delete(token);
+    }
+  }
+}, 60 * 60 * 1000);
+
 // Serve static files
 app.use(express.static('public'));
 
-// Serve frontend for all other routes
+// Catch all - serve nothing (API only)
 app.use((req, res) => {
-  res.type('text/html').send(indexHtml);
+  res.status(404).json({ error: 'Not found', hint: 'POST to /v1/proxy to generate proxy URL' });
 });
 
 export default app;
