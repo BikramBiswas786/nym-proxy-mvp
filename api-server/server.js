@@ -146,6 +146,109 @@ const indexHtml = `<!DOCTYPE html>
       border-radius: 6px;
       margin: 15px 0;
     }
+        .search-section {
+      background: linear-gradient(135deg, rgba(233, 69, 96, 0.15), rgba(255, 107, 107, 0.1));
+      padding: 30px;
+      border-radius: 12px;
+      margin-bottom: 30px;
+      border: 2px solid #e94560;
+    }
+    .search-header {
+      text-align: center;
+      margin-bottom: 20px;
+    }
+    .search-header h2 {
+      color: #ff6b6b;
+      margin-bottom: 10px;
+      font-size: 1.8rem;
+    }
+    .search-group {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 15px;
+    }
+    .search-input {
+      flex: 1;
+      padding: 15px 20px;
+      border: 2px solid #e94560;
+      border-radius: 8px;
+      background: #1a1a2e;
+      color: white;
+      font-size: 1rem;
+      transition: all 0.3s;
+    }
+    .search-input:focus {
+      outline: none;
+      border-color: #ff6b6b;
+      box-shadow: 0 0 15px rgba(233, 69, 96, 0.5);
+      background: #0f3460;
+    }
+    .btn-search {
+      padding: 15px 40px;
+      background: linear-gradient(135deg, #e94560, #ff6b6b);
+      color: white;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: 700;
+      font-size: 1rem;
+      transition: all 0.3s;
+    }
+    .btn-search:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 10px 25px rgba(233, 69, 96, 0.4);
+    }
+    .btn-search:active {
+      transform: scale(0.98);
+    }
+    .loading {
+      display: none;
+      text-align: center;
+      color: #ff6b6b;
+      font-weight: 600;
+    }
+    .donation-section {
+      background: rgba(255, 193, 7, 0.05);
+      border: 2px solid #ffc107;
+      padding: 20px;
+      border-radius: 10px;
+      text-align: center;
+      margin-top: 15px;
+    }
+    .donation-section h3 {
+      color: #ffc107;
+      margin-bottom: 10px;
+      font-size: 1.2rem;
+    }
+    .wallet-address {
+      background: #000;
+      padding: 12px 15px;
+      border-radius: 6px;
+      color: #90ee90;
+      font-family: monospace;
+      font-size: 0.85rem;
+      word-break: break-all;
+      line-height: 1.5;
+      margin: 10px 0;
+      border: 1px solid #ffc107;
+    }
+    .copy-btn {
+      background: #ffc107;
+      color: #000;
+      padding: 8px 20px;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 0.9rem;
+      transition: all 0.3s;
+      margin-top: 10px;
+    }
+    .copy-btn:hover {
+      background: #ffed4e;
+      transform: translateY(-2px);
+    }
+    
   </style>
 </head>
 <body>
@@ -154,6 +257,28 @@ const indexHtml = `<!DOCTYPE html>
       <h1>🔐 Privacy Proxy</h1>
       <p>Access blocked content. Protect your privacy. Bypass censorship.</p>
     </div>
+
+    <div class="search-section">
+      <div class="search-header">
+        <h2>🔍 Access Blocked Content</h2>
+        <p>Enter a website URL to access it privately</p>
+      </div>
+      <div class="search-group">
+        <input type="text" class="search-input" id="targetUrl" placeholder="https://example.com" />
+        <button class="btn-search" onclick="accessContent()">Access Now</button>
+      </div>
+      <div id="loading" class="loading">🔄 Accessing content...</div>
+      <div class="donation-section">
+        <h3>💚 Support This Project</h3>
+        <p>Help us keep this tool free for activists and journalists worldwide</p>
+        <p><strong>Donate with Crypto:</strong></p>
+        <div class="wallet-address" id="walletAddr">Bitcoin: 1A1z7agoat7uy8w1kL3u7XkpJzZJaKnEWx</div>
+        <button class="copy-btn" onclick="copyWallet()">Copy Bitcoin Address</button>
+        <div class="wallet-address" id="walletAddr2" style="margin-top:15px;">Ethereum: 0x742d35Cc6634C0532925a3b844Bc9e7595f42e24</div>
+        <button class="copy-btn" onclick="copyWallet2()">Copy Ethereum Address</button>
+      </div>
+    </div>
+
 
     <div class="section">
       <h2>How It Works</h2>
@@ -246,6 +371,51 @@ const indexHtml = `<!DOCTYPE html>
       msg.style.display = 'block';
       setTimeout(() => { msg.style.display = 'none'; }, 5000);
     }
+
+        async function accessContent() {
+      const url = document.getElementById('targetUrl').value;
+      if (!url) {
+        showMessage('Please enter a URL', 'error');
+        return;
+      }
+      const loadingDiv = document.getElementById('loading');
+      loadingDiv.style.display = 'block';
+      try {
+        const response = await fetch('/v1/proxy', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url })
+        });
+        const data = await response.json();
+        if (data.success) {
+          showMessage('✅ Content accessed successfully!', 'success');
+          document.getElementById('targetUrl').value = '';
+        } else {
+          showMessage('❌ Error: ' + (data.error || 'Unknown error'), 'error');
+        }
+      } catch (e) {
+        showMessage('❌ Error accessing content: ' + e.message, 'error');
+      } finally {
+        loadingDiv.style.display = 'none';
+      }
+    }
+    function copyWallet() {
+      const wallet = document.getElementById('walletAddr').textContent.replace('Bitcoin: ', '');
+      navigator.clipboard.writeText(wallet).then(() => {
+        showMessage('✅ Bitcoin address copied!', 'success');
+      }).catch(() => {
+        showMessage('❌ Failed to copy address', 'error');
+      });
+    }
+    function copyWallet2() {
+      const wallet = document.getElementById('walletAddr2').textContent.replace('Ethereum: ', '');
+      navigator.clipboard.writeText(wallet).then(() => {
+        showMessage('✅ Ethereum address copied!', 'success');
+      }).catch(() => {
+        showMessage('❌ Failed to copy address', 'error');
+      });
+    }
+    
   </script>
 </body>
 </html>`;
