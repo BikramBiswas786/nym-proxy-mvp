@@ -8,6 +8,11 @@ const proxyLinks = new Map();
 app.use(cors());
 app.use(express.json({ limit: '5mb' }));
 
+// Redirect root to proxy interface
+app.get('/', (req, res) => {
+    res.redirect('/v1/proxy');
+  });
+
 // Health check
 app.get('/v1/health', (req, res) => {
   res.json({ status: 'healthy', timestamp: new Date().toISOString() });
