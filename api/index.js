@@ -2,11 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import crypto from 'crypto';
 import axios from 'axios';
-const HttpProxyAgent = require('http-proxy-agent');
-const HttpsProxyAgent = require('https-proxy-agent');
-
-const app = express();
-const SECRET_KEY = crypto.createHmac('sha256', 'fixed-nym-proxy-secret').update('nym-proxy-v2-1').digest('hex');
+ const app = express();
 
 // Response cache with TTL
 const responseCache = new Map();
@@ -15,9 +11,8 @@ const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 // Connection pool settings
 const axiosInstance = axios.create({
   timeout: 50000,
-  maxRedirects: 5,
-  httpAgent: new (require('http').Agent)({ keepAlive: true, maxSockets: 50 }),
-  httpsAgent: new (require('https').Agent)({ keepAlive: true, maxSockets: 50 })
+httpAgent: new (require('http').Agent)({ keepAlive: true, maxSockets: 50 }),
+  httpsAgent: new (require('https').Agent)({ keepAlive: true, maxSockets: 50 })  
 });
 
 app.use(express.json({ limit: '1gb' }));
