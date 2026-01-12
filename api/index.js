@@ -30,8 +30,9 @@ if(!url)return res.status(400).json({error:'URL required'});
 const token=crypto.randomBytes(32).toString('hex');
 const expiresAt=new Date(Date.now()+24*60*60*1000);
 proxyLinks.set(token,{url,createdAt:new Date(),expiresAt,accessed:false});
-const proxyUrl=`https://${req.get('host')}/access/${token}`;
-res.json({success:true,originalUrl:url,proxyUrl:proxyUrl,expiresAt:expiresAt.toISOString(),expiresIn:'24 hours'});
+const host = req.headers['x-forwarded-host'] || req.get('host') || 'nym-proxy-backend.vercel.app';
+const proto = req.headers['x-forwarded-proto'] || 'https';
+const proxyUrl = `${proto}://${host}/access/${token}`;res.json({success:true,originalUrl:url,proxyUrl:proxyUrl,expiresAt:expiresAt.toISOString(),expiresIn:'24 hours'});
 }catch(e){
 res.status(500).json({error:'Server error',details:e.message});
 }
