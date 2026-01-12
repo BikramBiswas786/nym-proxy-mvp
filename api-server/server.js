@@ -1,1 +1,152 @@
-import express from 'express';import cors from 'cors';import crypto from 'crypto';import axios from 'axios';const app = express();const proxyLinks = new Map();const cryptoPriceCache = new Map();app.use(cors());app.use(express.json({limit:'5mb'}));app.get('/v1/health',(req,res)=>{res.json({status:'healthy',timestamp:new Date().toISOString()});});app.get('/v1/status',(req,res)=>{res.json({service:'Cloud Proxy with DEX',version:'2.0',features:{videoStreaming:true,dexTrading:true,ipMasking:true,livePrice:true}});});app.get('/v1/proxy',(req,res)=>{const html=`<!DOCTYPE html><html lang='en'><head><meta charset='UTF-8'><meta name='viewport' content='width=device-width, initial-scale=1.0'><title>Cloud Proxy + DEX</title><style>*{margin:0;padding:0;box-sizing:border-box;}body{font-family:'Segoe UI',sans-serif;background:linear-gradient(135deg,#1a1a2e,#16213e);min-height:100vh;padding:20px;color:#e0e0e0;}.container{max-width:1200px;margin:0 auto;background:rgba(15,52,96,0.95);border-radius:15px;padding:40px;border:2px solid #e94560;box-shadow:0 20px 60px rgba(0,0,0,0.5);}.header{text-align:center;margin-bottom:30px;}.header h1{font-size:2.5rem;color:#ff6b6b;margin-bottom:10px;}</style></head><body><div class='container'><div class='header'><h1>🚀 Cloud Proxy v2.0</h1><p>Video Streaming + Live DEX Trading</p></div></div></body></html>`;res.type('text/html').send(html);});app.post('/v1/proxy',async(req,res)=>{try{const{url}=req.body;if(!url)return res.status(400).json({error:'URL required'});const token=crypto.randomBytes(32).toString('hex');const expiresAt=new Date(Date.now()+24*60*60*1000);proxyLinks.set(token,{url,createdAt:new Date(),expiresAt,accessed:false});res.json({success:true,originalUrl:url,proxyUrl:`https://nym-proxy-backend.vercel.app/access/${token}`,expiresAt:expiresAt.toISOString(),expiresIn:'24 hours'});}catch(e){res.status(500).json({error:'Server error',details:e.message});}});app.get('/access/:token',async(req,res)=>{try{const{token}=req.params;const proxyData=proxyLinks.get(token);if(!proxyData)return res.status(404).json({error:'Link expired or invalid'});if(new Date()>new Date(proxyData.expiresAt)){proxyLinks.delete(token);return res.status(410).json({error:'Link expired. Generate new.'});}const response=await fetch(proxyData.url,{headers:{'User-Agent':'Mozilla/5.0 CloudProxy/2.0'},timeout:15000});if(!response.ok)return res.status(response.status).json({error:`Target returned ${response.status}`});const content=await response.text();proxyData.accessed=true;res.set({'Content-Type':response.headers.get('content-type')||'text/html','X-Privacy-Protected':'true','X-IP-Masked':'true','Cache-Control':'no-store'});res.send(content);}catch(e){res.status(500).json({error:'Failed to access content',details:e.message});}});app.use(express.static('public'));app.use((req,res)=>res.status(404).json({error:'Not found',hint:'POST to /v1/proxy or GET /v1/proxy'}));export default app;
+import express from 'express';
+import cors from 'cors';
+import crypto from 'crypto';
+
+const app = express();
+const proxyLinks = new Map();
+
+app.use(cors());
+app.use(express.json({limit:'5mb'}));
+
+// Health check endpoint
+app.get('/v1/health', (req, res) => {
+  res.json({status: 'healthy', timestamp: new Date().toISOString()});
+});
+
+// Status endpoint
+app.get('/v1/status', (req, res) => {
+  res.json({
+    service: 'NYM Proxy + HTTP Access',
+    version: '1.0',
+    features: {
+      privacy: true,
+      anonymousAccess: true,
+      tokenBasedLinks: true
+    }
+  });
+});
+
+// UI endpoint
+app.get('/v1/proxy', (req, res) => {
+  const html = `
+<!DOCTYPE html>
+<html>
+<head>
+  <title>NYM Proxy</title>
+  <style>
+    body { font-family: sans-serif; margin: 20px; background: #f0f0f0; }
+    .container { max-width: 800px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; }
+    h1 { color: #333; }
+    input { width: 100%; padding: 10px; margin: 10px 0; font-size: 16px; }
+    button { background: #007bff; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; }
+    button:hover { background: #0056b3; }
+    .result { margin-top: 20px; padding: 10px; background: #e8f4f8; border-radius: 4px; }
+    code { background: #f5f5f5; padding: 10px; display: block; margin: 10px 0; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>NYM Proxy</h1>
+    <p>Generate anonymous links for any URL</p>
+    <input type="text" id="urlInput" placeholder="Enter URL to proxy (e.g., https://example.com)" />
+    <button onclick="generateLink()">Generate Anonymous Link</button>
+    <div id="result"></div>
+  </div>
+  <script>
+    async function generateLink() {
+      const url = document.getElementById('urlInput').value;
+      if (!url) return alert('Please enter a URL');
+      try {
+        const response = await fetch('/v1/proxy', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({url})
+        });
+        const data = await response.json();
+        if (data.proxyUrl) {
+          document.getElementById('result').innerHTML = `
+            <div class="result">
+              <p><strong>Anonymous Link Generated:</strong></p>
+              <code><a href="${data.proxyUrl}" target="_blank">${data.proxyUrl}</a></code>
+              <p>Expires in: ${data.expiresIn}</p>
+            </div>
+          `;
+        } else {
+          alert('Error: ' + (data.error || 'Unknown error'));
+        }
+      } catch(e) {
+        alert('Error: ' + e.message);
+      }
+    }
+  </script>
+</body>
+</html>
+  `;
+  res.type('text/html').send(html);
+});
+
+// Create proxy link
+app.post('/v1/proxy', async (req, res) => {
+  try {
+    const { url } = req.body;
+    if (!url) return res.status(400).json({ error: 'URL required' });
+    
+    const token = crypto.randomBytes(32).toString('hex');
+    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+    
+    proxyLinks.set(token, {
+      url,
+      createdAt: new Date(),
+      expiresAt,
+      accessed: false
+    });
+    
+    res.json({
+      success: true,
+      originalUrl: url,
+      proxyUrl: `https://nym-proxy-backend.vercel.app/access/${token}`,
+      expiresAt: expiresAt.toISOString(),
+      expiresIn: '24 hours'
+    });
+  } catch (e) {
+    res.status(500).json({ error: 'Server error', details: e.message });
+  }
+});
+
+// Access proxy link
+app.get('/access/:token', async (req, res) => {
+  try {
+    const { token } = req.params;
+    const proxyData = proxyLinks.get(token);
+    
+    if (!proxyData) {
+      return res.status(404).json({ error: 'Link not found' });
+    }
+    
+    if (new Date() > new Date(proxyData.expiresAt)) {
+      proxyLinks.delete(token);
+      return res.status(410).json({ error: 'Link expired' });
+    }
+    
+    // Fetch the actual content
+    const response = await fetch(proxyData.url);
+    const content = await response.text();
+    
+    proxyData.accessed = true;
+    res.set({
+      'Content-Type': response.headers.get('content-type') || 'text/html',
+      'X-Privacy-Protected': 'true',
+      'Cache-Control': 'no-store'
+    });
+    res.send(content);
+  } catch (e) {
+    res.status(500).json({ error: 'Failed to access content', details: e.message });
+  }
+});
+
+app.use(express.static('public'));
+app.use((req, res) => {
+  res.status(404).json({ error: 'Not found', hint: 'POST to /v1/proxy or GET /v1/proxy' });
+});
+
+export default app;
