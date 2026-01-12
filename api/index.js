@@ -71,14 +71,22 @@ app.post('/v1/proxy', async (req, res) => {
 
 app.get('/access/:token(*)', async (req, res) => {
   try {
-const token = req.params.token.replace(/=/g, ''); const url = verifyToken(token);    if (!url) return res.status(400).json({ error: 'Invalid or tampered token' });
+    const token = req.params.token;
+    const url = verifyToken(token);
+    if (!url) return res.status(400).json({ error: 'Invalid or tampered token' });
+    
+    try { new URL(url); } catch (e) { return res.status(400).json({ error: 'Invalid URL in token' }); }
+    
     const response = await axios({ method: 'get', url, timeout: 30000, headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' }, maxRedirects: 5, responseType: 'stream' });
+    
     res.set({ 'Content-Type': response.headers['content-type'] || 'text/html', 'Cache-Control': 'no-cache, no-store, must-revalidate', 'Pragma': 'no-cache', 'Expires': '0' });
     if (response.headers['content-length']) res.set('Content-Length', response.headers['content-length']);
+    
     response.data.pipe(res);
     response.data.on('error', (error) => { if (!res.headersSent) res.status(502).json({ error: error.message }); else res.end(); });
   } catch (e) {
-    if (!res.headersSent) res.status(502).json({ error: 'Failed to fetch: ' + e.message }); else res.end();
+    if (!res.headersSent) res.status(502).json({ error: 'Failed to fetch: ' + e.message });
+    else res.end();
   }
 });
 
