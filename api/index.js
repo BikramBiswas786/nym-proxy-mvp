@@ -7,7 +7,7 @@ const app = express();
 const proxyLinks = new Map();
 
 app.use(cors());
-app.use(express.json({limit:'5mb'}));
+app.use(express.json({limit:'1gb'}));
 
 app.get('/v1/health',(req,res)=>res.json({status:'healthy'}));
 
