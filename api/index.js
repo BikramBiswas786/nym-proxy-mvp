@@ -4,7 +4,7 @@ import crypto from 'crypto';
 import axios from 'axios';
 
 const app = express();
-const SECRET_KEY = process.env.SECRET_KEY || 'default-secret-key-change-this';
+const SECRET_KEY = crypto.createHmac('sha256', 'fixed-nym-proxy-secret').update('nym-proxy-v2-1').digest('hex');
 
 app.use(cors());
 app.use(express.json({ limit: '1gb' }));
@@ -30,22 +30,22 @@ app.get('/v1/proxy', (req, res) => {
   res.type('text/html').send(h);
 });
 
-function encodeToken(url) {
-  const iv = crypto.randomBytes(16);
-  const cipher = crypto.createCipheriv('aes-256-cbc', Buffer.from(SECRET_KEY.padEnd(32, '0').slice(0, 32)), iv);
-  let encrypted = cipher.update(url, 'utf8', 'hex');
-  encrypted += cipher.final('hex');
-  return iv.toString('hex') + ':' + encrypted;
+function createToken(url) {
+  const payload = Buffer.from(url).toString('base64');
+  const hmac = crypto.createHmac('sha256', SECRET_KEY);
+  const signature = hmac.update(payload).digest('hex');
+  return `${payload}.${signature}`;
 }
 
-function decodeToken(token) {
+function verifyToken(token) {
   try {
-    const [ivHex, encryptedHex] = token.split(':');
-    const iv = Buffer.from(ivHex, 'hex');
-    const decipher = crypto.createDecipheriv('aes-256-cbc', Buffer.from(SECRET_KEY.padEnd(32, '0').slice(0, 32)), iv);
-    let decrypted = decipher.update(encryptedHex, 'hex', 'utf8');
-    decrypted += decipher.final('utf8');
-    return decrypted;
+    const [payload, signature] = token.split('.');
+    const hmac = crypto.createHmac('sha256', SECRET_KEY);
+    const expectedSignature = hmac.update(payload).digest('hex');
+    if (signature === expectedSignature) {
+      return Buffer.from(payload, 'base64').toString('utf-8');
+    }
+    return null;
   } catch (e) {
     return null;
   }
@@ -62,7 +62,7 @@ app.post('/v1/proxy', async (req, res) => {
       return res.status(400).json({ error: 'Invalid URL' });
     }
 
-    const token = encodeToken(url);
+    const token = createToken(url);
     const host = req.headers['x-forwarded-host'] || req.get('host') || 'nym-proxy-backend.vercel.app';
     const proto = req.headers['x-forwarded-proto'] || 'https';
     const proxyUrl = `${proto}://${host}/access/${token}`;
@@ -76,10 +76,10 @@ app.post('/v1/proxy', async (req, res) => {
 app.get('/access/:token', async (req, res) => {
   try {
     const { token } = req.params;
-    const url = decodeToken(token);
+    const url = verifyToken(token);
     
     if (!url) {
-      return res.status(400).json({ error: 'Invalid token' });
+      return res.status(400).json({ error: 'Invalid or tampered token' });
     }
 
     const response = await axios({
