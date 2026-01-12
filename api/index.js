@@ -2,9 +2,24 @@ import express from 'express';
 import cors from 'cors';
 import crypto from 'crypto';
 import axios from 'axios';
+const HttpProxyAgent = require('http-proxy-agent');
+const HttpsProxyAgent = require('https-proxy-agent');
 
 const app = express();
 const SECRET_KEY = crypto.createHmac('sha256', 'fixed-nym-proxy-secret').update('nym-proxy-v2-1').digest('hex');
+
+// Response cache with TTL
+const responseCache = new Map();
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+// Connection pool settings
+const axiosInstance = axios.create({
+  timeout: 50000,
+  maxRedirects: 5,
+  httpAgent: new (require('http').Agent)({ keepAlive: true, maxSockets: 50 }),
+  httpsAgent: new (require('https').Agent)({ keepAlive: true, maxSockets: 50 })
+});
+
 app.use(express.json({ limit: '1gb' }));
 app.use(express.urlencoded({ limit: '1gb', extended: true }));
 
@@ -13,7 +28,7 @@ app.get('/v1/health', (req, res) => res.json({ status: 'healthy' }));
 app.get('/v1/status', (req, res) => res.json({
   service: 'Cloud Proxy',
   version: '2.1',
-  features: { openLink: true, copyLink: true, toast: true, streaming: true }
+  features: { openLink: true, copyLink: true, toast: true, streaming: true, caching: true, timeout: '50s' }
 }));
 
 app.get('/v1/proxy', (req, res) => {
@@ -55,6 +70,46 @@ function verifyToken(token) {
   }
 }
 
+function getCacheKey(url) {
+  return crypto.createHash('sha256').update(url).digest('hex');
+}
+
+function getCachedResponse(url) {
+  const key = getCacheKey(url);
+  const cached = responseCache.get(key);
+  if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+    return cached.data;
+  }
+  return null;
+}
+
+function setCachedResponse(url, data) {
+  const key = getCacheKey(url);
+  responseCache.set(key, { data, timestamp: Date.now() });
+  if (responseCache.size > 100) {
+    const firstKey = responseCache.keys().next().value;
+    responseCache.delete(firstKey);
+  }
+}
+
+async function fetchWithRetry(url, maxRetries = 3) {
+  for (let i = 0; i < maxRetries; i++) {
+    try {
+      return await axiosInstance.get(url, {
+        responseType: 'arraybuffer',
+        headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' }
+      });
+    } catch (e) {
+      const delay = Math.pow(2, i) * 1000;
+      if (i < maxRetries - 1) {
+        await new Promise(resolve => setTimeout(resolve, delay));
+      } else {
+        throw e;
+      }
+    }
+  }
+}
+
 app.post('/v1/proxy', async (req, res) => {
   try {
     const { url } = req.body;
@@ -70,6 +125,7 @@ app.post('/v1/proxy', async (req, res) => {
 });
 
 app.get('/access/:token(*)', async (req, res) => {
+  const startTime = Date.now();
   try {
     const token = req.params.token;
     const url = verifyToken(token);
@@ -77,16 +133,31 @@ app.get('/access/:token(*)', async (req, res) => {
     
     try { new URL(url); } catch (e) { return res.status(400).json({ error: 'Invalid URL in token' }); }
     
-    const response = await axios({ method: 'get', url, timeout: 30000, headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' }, maxRedirects: 5, responseType: 'stream' });
+    // Check cache
+    const cached = getCachedResponse(url);
+    if (cached) {
+      console.log(`[CACHE HIT] ${url} (${Date.now() - startTime}ms)`);
+      res.set({ 'Content-Type': cached.contentType, 'X-Cache': 'HIT', 'Cache-Control': 'public, max-age=300' });
+      return res.send(cached.buffer);
+    }
     
-    res.set({ 'Content-Type': response.headers['content-type'] || 'text/html', 'Cache-Control': 'no-cache, no-store, must-revalidate', 'Pragma': 'no-cache', 'Expires': '0' });
-    if (response.headers['content-length']) res.set('Content-Length', response.headers['content-length']);
+    // Fetch with retry logic
+    const response = await fetchWithRetry(url);
+    const contentType = response.headers['content-type'] || 'text/html';
     
-    response.data.pipe(res);
-    response.data.on('error', (error) => { if (!res.headersSent) res.status(502).json({ error: error.message }); else res.end(); });
+    // Cache successful response
+    setCachedResponse(url, { buffer: response.data, contentType });
+    
+    res.set({ 'Content-Type': contentType, 'X-Cache': 'MISS', 'Cache-Control': 'public, max-age=300', 'X-Response-Time': `${Date.now() - startTime}ms` });
+    res.send(response.data);
   } catch (e) {
-    if (!res.headersSent) res.status(502).json({ error: 'Failed to fetch: ' + e.message });
-    else res.end();
+    const elapsed = Date.now() - startTime;
+    console.error(`[ERROR] Failed to fetch (${elapsed}ms): ${e.message}`);
+    if (!res.headersSent) {
+      res.status(502).json({ error: 'Failed to fetch: ' + e.message, duration: `${elapsed}ms` });
+    } else {
+      res.end();
+    }
   }
 });
 
