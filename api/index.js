@@ -5,104 +5,57 @@ import axios from 'axios';
 
 const app = express();
 const proxyLinks = new Map();
-const cryptoPriceCache = new Map();
 
 app.use(cors());
 app.use(express.json({limit:'5mb'}));
 
-app.get('/v1/health',(req,res)=>{
-  res.json({status:'healthy',timestamp:new Date().toISOString()});
-});
+app.get('/v1/health',(req,res)=>res.json({status:'healthy'}));
 
-app.get('/v1/status',(req,res)=>{
-  res.json({service:'Cloud Proxy with DEX',version:'2.0',features:{videoStreaming:true,dexTrading:true,ipMasking:true,livePrice:true}});
-});
+app.get('/v1/status',(req,res)=>res.json({service:'Cloud Proxy',version:'2.1',features:{openLink:true,copyLink:true,toastNotifications:true}}));
 
 app.get('/v1/proxy',(req,res)=>{
-const html='<html><head><title>Cloud Proxy + DEX</title><style>body{font-family:Arial;background:#1a1a2e;color:#fff;padding:20px;}h1{color:#ff6b6b;}.container{max-width:900px;margin:0 auto;}.tabs{display:flex;gap:10px;margin:20px 0;}.tab{padding:10px 20px;background:#e94560;border:none;color:white;cursor:pointer;}.tab.active{background:#ff6b6b;}.section{display:none;margin:20px 0;padding:20px;background:#16213e;border-radius:8px;}.section.active{display:block;}.input-group{display:flex;gap:10px;margin:15px 0;}.input-group input{flex:1;padding:10px;border:none;border-radius:5px;}.input-group button{padding:10px 20px;background:#ff6b6b;border:none;color:white;cursor:pointer;border-radius:5px;}.result{background:#0f3460;padding:15px;margin:15px 0;border-radius:5px;word-break:break-all;}.btn-group{display:flex;gap:10px;margin:15px 0;}.btn-action{flex:1;padding:10px;background:#4caf50;border:none;color:white;cursor:pointer;border-radius:5px;}</style></head><body><div class="container"><h1>Cloud Proxy v2.0</h1><div class="tabs"><button class="tab active" onclick="showTab(0)">Proxy</button><button class="tab" onclick="showTab(1)">Streaming</button><button class="tab" onclick="showTab(2)">DEX Trading</button></div><div class="section active"><h2>Privacy Proxy</h2><div class="input-group"><input id="url" placeholder="https://example.com" type="url"/><button onclick="generateProxy()">Generate Link</button></div><div id="result"></div><div id="buttons" class="btn-group" style="display:none;"><button class="btn-action" onclick="openLink()">Open Link</button><button class="btn-action" onclick="copyLink()">Copy Link</button></div></div><div class="section"><h2>Video Streaming</h2><input id="videoUrl" placeholder="https://youtube.com/watch?v=..." type="url"/><button onclick="streamVideo()">Stream Video</button></div><div class="section"><h2>Live DEX Trading</h2><div id="prices">Loading prices...</div><div style="margin:20px 0;"><input id="from" placeholder="ETH"/><input id="to" placeholder="USDC"/><input id="amt" placeholder="Amount" type="number"/><button onclick="getQuote()">Get Quote</button></div><div id="quote"></div></div></div><script>let proxyUrl="";function showTab(n){const secs=document.querySelectorAll(".section");const tabs=document.querySelectorAll(".tab");secs.forEach(s=>s.classList.remove("active"));tabs.forEach(t=>t.classList.remove("active"));secs[n].classList.add("active");tabs[n].classList.add("active");if(n===2)loadPrices();}async function generateProxy(){const url=document.getElementById("url").value;if(!url){alert("Enter URL");return;}try{const r=await fetch("/v1/proxy",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({url})});const d=await r.json();proxyUrl=d.proxyUrl;document.getElementById("result").innerHTML="<strong>Proxy Link:</strong><div class=\"result\">" + d.proxyUrl + "</div>";document.getElementById("buttons").style.display="flex";}catch(e){alert("Error: "+e.message);}}function openLink(){if(proxyUrl)window.open(proxyUrl,"_blank");}function copyLink(){if(proxyUrl)navigator.clipboard.writeText(proxyUrl);}async function streamVideo(){}async function loadPrices(){try{const r=await fetch("/api/top-prices");const p=await r.json();let html="";p.slice(0,10).forEach(x=>{html+="<div>" + x.symbol.toUpperCase() + ": \\$" + x.price.toFixed(2) + " (" + x.change24h.toFixed(2) + "%)</div>";});document.getElementById("prices").innerHTML=html;}catch(e){console.error(e);}}async function getQuote(){const f=document.getElementById("from").value;const t=document.getElementById("to").value;const a=document.getElementById("amt").value;if(!f||!t||!a){alert("Fill all fields");return;}document.getElementById("quote").innerHTML="Output: " + a + " " + t;}loadPrices();setInterval(loadPrices,60000);</script></body></html>';
-res.type('text/html').send(html);
+  const html=`<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Cloud Proxy v2.1</title><style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:Segoe UI,sans-serif;background:linear-gradient(135deg,#1a1a2e,#16213e);color:#fff;padding:20px;min-height:100vh}.container{max-width:900px;margin:0 auto}h1{color:#ff6b6b;text-align:center;margin-bottom:30px}h2{color:#ff6b6b;margin:20px 0}.section{background:rgba(15,52,96,0.5);padding:30px;border-radius:12px;border:1px solid rgba(255,107,107,0.2);margin:20px 0}.input-group{display:flex;gap:10px;margin:20px 0;flex-wrap:wrap}input{flex:1;min-width:250px;padding:12px;border:2px solid transparent;border-radius:8px;background:rgba(255,255,255,0.1);color:#fff;transition:all 0.3s}input:focus{outline:none;border-color:#ff6b6b;box-shadow:0 0 10px rgba(255,107,107,0.3)}.btn{padding:12px 24px;background:linear-gradient(135deg,#ff6b6b,#e94560);color:white;border:none;border-radius:8px;cursor:pointer;font-weight:600;transition:all 0.3s}.btn:hover{transform:translateY(-2px);box-shadow:0 8px 20px rgba(255,107,107,0.4)}.btn:disabled{opacity:0.7}.result-box{display:none;background:rgba(0,0,0,0.3);padding:20px;border-radius:10px;border:2px solid rgba(255,107,107,0.3);margin:20px 0}.result-box.show{display:block}.result-url{background:rgba(0,0,0,0.5);padding:15px;border-radius:8px;color:#4fc3f7;word-break:break-all;font-family:monospace;margin:15px 0;border-left:4px solid #ff6b6b}.action-buttons{display:none;gap:12px;margin:15px 0}.action-buttons.show{display:flex}.btn-open{background:linear-gradient(135deg,#4caf50,#45a049)}.btn-copy{background:linear-gradient(135deg,#2196f3,#1976d2)}.btn-action{flex:1;min-width:140px}.toast-container{position:fixed;top:20px;right:20px;z-index:9999;max-width:400px}.toast{background:rgba(0,0,0,0.9);color:#fff;padding:12px 16px;border-radius:8px;border-left:4px solid #ff6b6b;margin:8px 0;animation:slideIn 0.3s;display:flex;align-items:center;gap:8px}.toast.success{border-left-color:#4caf50}.toast.error{border-left-color:#ff6b6b}@keyframes slideIn{from{transform:translateX(400px);opacity:0}to{transform:translateX(0);opacity:1}}@media(max-width:768px){.input-group{flex-direction:column}input{min-width:100%}.action-buttons{flex-direction:column}.btn-action{min-width:100%}}</style></head><body><div class="toast-container" id="toastContainer"></div><div class="container"><h1>🔐 Cloud Proxy v2.1</h1><div class="section"><h2>Generate Proxy Link</h2><div class="input-group"><input id="url" type="url" placeholder="https://example.com"/><button class="btn" onclick="generateProxy()">Generate Link</button></div><div id="resultBox" class="result-box"><div style="color:#a0a0a0;margin-bottom:10px">Proxy Link (24h):</div><div class="result-url" id="proxyUrl"></div><div class="action-buttons" id="actionButtons"><button class="btn btn-action btn-open" onclick="openLink()">🔗 Open Link</button><button class="btn btn-action btn-copy" onclick="copyLink()">📋 Copy Link</button></div></div></div></div><script>let proxyUrl="";async function generateProxy(){const url=document.getElementById("url").value;if(!url){showToast("Enter URL","error");return}try{const btn=event.target;btn.disabled=true;btn.textContent="Generating...";const r=await fetch("/v1/proxy",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({url})});const d=await r.json();if(!r.ok){showToast("Error: "+(d.error||"Unknown"),"error");btn.disabled=false;btn.textContent="Generate Link";return}proxyUrl=d.proxyUrl;document.getElementById("proxyUrl").textContent=proxyUrl;document.getElementById("resultBox").classList.add("show");document.getElementById("actionButtons").classList.add("show");showToast("✓ Link generated!","success");btn.disabled=false;btn.textContent="Generate Link"}catch(e){showToast("Error: "+e.message,"error")}}function openLink(){if(!proxyUrl){showToast("Generate a link first","error");return}window.open(proxyUrl,"_blank");showToast("✓ Opening link...","success")}function copyLink(){if(!proxyUrl){showToast("Generate a link first","error");return}navigator.clipboard.writeText(proxyUrl).then(()=>{showToast("✓ Copied to clipboard!","success")}).catch(()=>{showToast("Copy failed","error")})}function showToast(msg,type){const c=document.getElementById("toastContainer");const t=document.createElement("div");t.className="toast "+type;const icons={success:"✓",error:"✕"};t.innerHTML=`<span>${icons[type]}</span><span>${msg}</span>`;c.appendChild(t);setTimeout(()=>{t.style.opacity="0";setTimeout(()=>t.remove(),300)},3000)}</script></body></html>`;
+  res.type('text/html').send(html);
 });
 
 app.post('/v1/proxy',async(req,res)=>{
-try{
-const {url}=req.body;
-if(!url)return res.status(400).json({error:'URL required'});
-const token=crypto.randomBytes(32).toString('hex');
-const expiresAt=new Date(Date.now()+24*60*60*1000);
-proxyLinks.set(token,{url,createdAt:new Date(),expiresAt,accessed:false});
-const host = req.headers['x-forwarded-host'] || req.get('host') || 'nym-proxy-backend.vercel.app';
-const proto = req.headers['x-forwarded-proto'] || 'https';
-const proxyUrl = `${proto}://${host}/access/${token}`;res.json({success:true,originalUrl:url,proxyUrl:proxyUrl,expiresAt:expiresAt.toISOString(),expiresIn:'24 hours'});
-}catch(e){
-res.status(500).json({error:'Server error',details:e.message});
-}
+  try{
+    const {url}=req.body;
+    if(!url)return res.status(400).json({error:'URL required'});
+    const token=crypto.randomBytes(32).toString('hex');
+    const expiresAt=new Date(Date.now()+24*60*60*1000);
+    proxyLinks.set(token,{url,expiresAt,accessed:false});
+    const host=req.headers['x-forwarded-host']||req.get('host')||'nym-proxy-backend.vercel.app';
+    const proto=req.headers['x-forwarded-proto']||'https';
+    const proxyUrl=`${proto}://${host}/access/${token}`;
+    res.json({success:true,proxyUrl,expiresAt:expiresAt.toISOString()});
+  }catch(e){
+    res.status(500).json({error:e.message});
+  }
 });
 
 app.get('/access/:token',async(req,res)=>{
-try{
-const {token}=req.params;
-const proxyData=proxyLinks.get(token);
-if(!proxyData)return res.status(404).json({error:'Link expired or invalid'});
-if(new Date()>new Date(proxyData.expiresAt)){
-proxyLinks.delete(token);
-return res.status(410).json({error:'Link expired. Generate new.'});
-}
-try {
-const response=await axios.get(proxyData.url,{timeout:15000,headers:{'User-Agent':'Mozilla/5.0'}});
-proxyData.accessed=true;
-res.set({'Content-Type':response.headers['content-type']||'text/html','Cache-Control':'no-store'});
-res.send(response.data);
-} catch(fetchError) {
-res.status(502).json({error:'Failed to access target',details:fetchError.message});
-}
-}catch(e){
-res.status(500).json({error:'Proxy error'});
-}
-});
-
-app.get('/stream',async(req,res)=>{
-try{
-const {url}=req.query;
-if(!url)return res.status(400).json({error:'URL required'});
-const response=await axios.get(decodeURIComponent(url),{timeout:30000,responseType:'stream'});
-res.set({'Content-Type':response.headers['content-type']||'video/mp4'});
-response.data.pipe(res);
-}catch(e){
-res.status(500).json({error:'Streaming failed'});
-}
-});
-
-app.get('/api/top-prices',async(req,res)=>{
-try{
-const cacheKey='topprices';
-const cached=cryptoPriceCache.get(cacheKey);
-if(cached&&Date.now()-cached.time<60000){
-return res.json(cached.data);
-}
-const r=await axios.get('https://api.coingecko.com/api/v3/coins/markets',{params:{vs_currency:'usd',order:'market_cap_desc',per_page:10,page:1},timeout:10000});
-const prices=r.data.map(p=>({symbol:p.symbol,price:p.current_price,change24h:p.price_change_percentage_24h||0}));
-cryptoPriceCache.set(cacheKey,{data:prices,time:Date.now()});
-res.json(prices);
-}catch(e){
-res.status(500).json({error:'Failed to fetch prices'});
-}
-});
-
-app.post('/api/swap-quote',async(req,res)=>{
-try{
-const {fromToken,toToken,amount}=req.body;
-if(!fromToken||!toToken||!amount)return res.status(400).json({error:'Missing parameters'});
-res.json({output:Math.random().toFixed(2),gas:21000,rate:1.5});
-}catch(e){
-res.status(500).json({error:'Failed to get quote'});
-}
+  try{
+    const {token}=req.params;
+    const proxyData=proxyLinks.get(token);
+    if(!proxyData)return res.status(404).json({error:'Link expired'});
+    if(new Date()>proxyData.expiresAt){
+      proxyLinks.delete(token);
+      return res.status(410).json({error:'Link expired'});
+    }
+    const r=await axios.get(proxyData.url,{timeout:15000,headers:{'User-Agent':'Mozilla/5.0'}});
+    res.set({'Content-Type':r.headers['content-type']||'text/html','Cache-Control':'no-store'});
+    res.send(r.data);
+  }catch(e){
+    res.status(502).json({error:'Access failed: '+e.message});
+  }
 });
 
 setInterval(()=>{
-const now=new Date();
-for(const [token,data]of proxyLinks){
-if(now>new Date(data.expiresAt))proxyLinks.delete(token);
-}
+  const now=new Date();
+  for(const [token,data] of proxyLinks){
+    if(now>data.expiresAt)proxyLinks.delete(token);
+  }
 },60*60*1000);
 
 export default app;
