@@ -4,8 +4,7 @@ import crypto from 'crypto';
 import axios from 'axios';
 
 const app = express();
-const SECRET_KEY = crypto.createHmac('sha256', 'fixed-nym-proxy-secret').update('nym-proxy-v2-1').digest('hex');}app.use(cors());
-app.use(express.json({ limit: '1gb' }));
+const SECRET_KEY = crypto.createHmac('sha256', 'fixed-nym-proxy-secret').update('nym-proxy-v2-1').digest('hex');}app.use(express.json({ limit: '1gb' }));
 app.use(express.urlencoded({ limit: '1gb', extended: true }));
 
 app.get('/v1/health', (req, res) => res.json({ status: 'healthy' }));
