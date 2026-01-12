@@ -15,12 +15,7 @@ app.get('/v1/health', (req, res) => res.json({ status: 'healthy' }));
 app.get('/v1/status', (req, res) => res.json({
   service: 'Cloud Proxy',
   version: '2.1',
-  features: {
-    openLink: true,
-    copyLink: true,
-    toast: true,
-    streaming: true
-  }
+  features: { openLink: true, copyLink: true, toast: true, streaming: true }
 }));
 
 app.get('/v1/proxy', (req, res) => {
@@ -28,8 +23,17 @@ app.get('/v1/proxy', (req, res) => {
   res.type('text/html').send(h);
 });
 
+function toUrlSafeBase64(str) {
+  return Buffer.from(str).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+}
+
+function fromUrlSafeBase64(str) {
+  str = str.replace(/-/g, '+').replace(/_/g, '/').padEnd(str.length + (4 - str.length % 4) % 4, '=');
+  return Buffer.from(str, 'base64').toString('utf-8');
+}
+
 function createToken(url) {
-  const payload = Buffer.from(url).toString('base64');
+  const payload = toUrlSafeBase64(url);
   const hmac = crypto.createHmac('sha256', SECRET_KEY);
   const signature = hmac.update(payload).digest('hex');
   return `${payload}.${signature}`;
@@ -37,15 +41,14 @@ function createToken(url) {
 
 function verifyToken(token) {
   try {
-    const parts = token.split('.');
-    if (parts.length < 2) return null;
     const lastDot = token.lastIndexOf('.');
+    if (lastDot === -1) return null;
     const payload = token.substring(0, lastDot);
     const signature = token.substring(lastDot + 1);
     const hmac = crypto.createHmac('sha256', SECRET_KEY);
     const expectedSignature = hmac.update(payload).digest('hex');
     if (signature === expectedSignature) {
-      return Buffer.from(payload, 'base64').toString('utf-8');
+      return fromUrlSafeBase64(payload);
     }
     return null;
   } catch (e) {
@@ -58,19 +61,11 @@ app.post('/v1/proxy', async (req, res) => {
   try {
     const { url } = req.body;
     if (!url) return res.status(400).json({ error: 'URL required' });
-    
-    try {
-      new URL(url);
-    } catch (e) {
-      return res.status(400).json({ error: 'Invalid URL' });
-    }
-
+    try { new URL(url); } catch (e) { return res.status(400).json({ error: 'Invalid URL' }); }
     const token = createToken(url);
     const host = req.headers['x-forwarded-host'] || req.get('host') || 'nym-proxy-backend.vercel.app';
     const proto = req.headers['x-forwarded-proto'] || 'https';
-    const proxyUrl = `${proto}://${host}/access/${token}`;
-    
-    res.json({ proxyUrl });
+    res.json({ proxyUrl: `${proto}://${host}/access/${token}` });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
@@ -79,57 +74,15 @@ app.post('/v1/proxy', async (req, res) => {
 app.get('/access/:token(*)', async (req, res) => {
   try {
     const token = req.params.token;
-    console.log('Received token:', token.substring(0, 50) + '...');
     const url = verifyToken(token);
-    
-    if (!url) {
-      console.error('Token verification failed for:', token.substring(0, 50));
-      return res.status(400).json({ error: 'Invalid or tampered token' });
-    }
-
-    console.log('Fetching URL:', url);
-    const response = await axios({
-      method: 'get',
-      url: url,
-      timeout: 30000,
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-      },
-      maxRedirects: 5,
-      responseType: 'stream'
-    });
-
-    const contentType = response.headers['content-type'] || 'text/html';
-    const contentLength = response.headers['content-length'];
-    
-    res.set({
-      'Content-Type': contentType,
-      'Cache-Control': 'no-cache, no-store, must-revalidate',
-      'Pragma': 'no-cache',
-      'Expires': '0'
-    });
-    
-    if (contentLength) {
-      res.set('Content-Length', contentLength);
-    }
-
+    if (!url) return res.status(400).json({ error: 'Invalid or tampered token' });
+    const response = await axios({ method: 'get', url, timeout: 30000, headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' }, maxRedirects: 5, responseType: 'stream' });
+    res.set({ 'Content-Type': response.headers['content-type'] || 'text/html', 'Cache-Control': 'no-cache, no-store, must-revalidate', 'Pragma': 'no-cache', 'Expires': '0' });
+    if (response.headers['content-length']) res.set('Content-Length', response.headers['content-length']);
     response.data.pipe(res);
-    
-    response.data.on('error', (error) => {
-      console.error('Stream error:', error.message);
-      if (!res.headersSent) {
-        res.status(502).json({ error: 'Stream error: ' + error.message });
-      } else {
-        res.end();
-      }
-    });
+    response.data.on('error', (error) => { if (!res.headersSent) res.status(502).json({ error: error.message }); else res.end(); });
   } catch (e) {
-    console.error('Proxy error:', e.message);
-    if (!res.headersSent) {
-      res.status(502).json({ error: 'Failed to fetch: ' + e.message });
-    } else {
-      res.end();
-    }
+    if (!res.headersSent) res.status(502).json({ error: 'Failed to fetch: ' + e.message }); else res.end();
   }
 });
 
