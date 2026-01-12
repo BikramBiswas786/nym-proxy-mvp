@@ -19,9 +19,7 @@ app.get('/v1/status', (req, res) => res.json({
     openLink: true,
     copyLink: true,
     toast: true,
-    streaming: true,
-    dexSupport: true,
-    staticSites: true
+    streaming: true
   }
 }));
 
@@ -34,14 +32,14 @@ function createToken(url) {
   const payload = Buffer.from(url).toString('base64');
   const hmac = crypto.createHmac('sha256', SECRET_KEY);
   const signature = hmac.update(payload).digest('hex');
-  return encodeURIComponent(`${payload}.${signature}`);
+  return `${payload}.${signature}`;
 }
 
-function verifyToken(encodedToken) {
+function verifyToken(token) {
   try {
-    const token = decodeURIComponent(encodedToken);
+    const parts = token.split('.');
+    if (parts.length < 2) return null;
     const lastDot = token.lastIndexOf('.');
-    if (lastDot === -1) return null;
     const payload = token.substring(0, lastDot);
     const signature = token.substring(lastDot + 1);
     const hmac = crypto.createHmac('sha256', SECRET_KEY);
@@ -51,6 +49,7 @@ function verifyToken(encodedToken) {
     }
     return null;
   } catch (e) {
+    console.error('Token verification error:', e.message);
     return null;
   }
 }
@@ -77,21 +76,24 @@ app.post('/v1/proxy', async (req, res) => {
   }
 });
 
-app.get('/access/:token', async (req, res) => {
+app.get('/access/:token(*)', async (req, res) => {
   try {
-    const { token } = req.params;
+    const token = req.params.token;
+    console.log('Received token:', token.substring(0, 50) + '...');
     const url = verifyToken(token);
     
     if (!url) {
+      console.error('Token verification failed for:', token.substring(0, 50));
       return res.status(400).json({ error: 'Invalid or tampered token' });
     }
 
+    console.log('Fetching URL:', url);
     const response = await axios({
       method: 'get',
       url: url,
       timeout: 30000,
       headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
       },
       maxRedirects: 5,
       responseType: 'stream'
