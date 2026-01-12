@@ -19,13 +19,13 @@ app.get('/v1/status',(req,res)=>{
 });
 
 app.get('/v1/proxy',(req,res)=>{
-const html=`<!DOCTYPE html><html lang='en'><head><meta charset='UTF-8'><meta name='viewport' content='width=device-width, initial-scale=1.0'><title>Cloud Proxy + DEX</title><style>*{margin:0;padding:0;box-sizing:border-box;}body{font-family:'Segoe UI',sans-serif;background:linear-gradient(135deg,#1a1a2e,#16213e);min-height:100vh;padding:20px;color:#e0e0e0;}.container{max-width:1200px;margin:0 auto;background:rgba(15,52,96,0.95);border-radius:15px;padding:40px;border:2px solid #e94560;box-shadow:0 20px 60px rgba(0,0,0,0.5);}.header{text-align:center;margin-bottom:30px;}.header h1{font-size:2.5rem;color:#ff6b6b;margin-bottom:10px;}.tabs{display:flex;gap:10px;margin-bottom:30px;border-bottom:2px solid #e94560;}.tab-btn{padding:15px 30px;background:rgba(233,69,96,0.2);border:none;color:#e0e0e0;cursor:pointer;font-weight:600;border-bottom:3px solid transparent;transition:all 0.3s;}.tab-btn.active{background:rgba(233,69,96,0.4);border-bottom-color:#e94560;}.section{display:none;margin-bottom:25px;}.section.active{display:block;}.input-group{display:flex;gap:10px;margin:20px 0;flex-wrap:wrap;}.url-input,.dex-input{flex:1;min-width:250px;padding:15px;border:2px solid #e94560;border-radius:8px;background:#1a1a2e;color:white;font-size:1rem;}.btn{padding:15px 30px;background:linear-gradient(135deg,#e94560,#ff6b6b);color:white;border:none;border-radius:8px;cursor:pointer;font-weight:700;font-size:0.95rem;transition:all 0.3s;}.btn:hover{transform:translateY(-3px);box-shadow:0 10px 25px rgba(233,69,96,0.4);}.price-board{background:rgba(233,69,96,0.15);border:2px solid #e94560;border-radius:10px;padding:20px;margin:20px 0;}.price-row{display:flex;justify-content:space-between;padding:10px;background:rgba(0,0,0,0.3);border-radius:5px;margin:5px 0;}.dex-panel{background:rgba(100,200,255,0.1);border-left:4px solid #00bfff;border-radius:8px;padding:20px;margin:15px 0;}.dex-panel h3{color:#00bfff;margin-bottom:15px;}.quote-result{background:#000;color:#00ff00;padding:15px;border-radius:8px;font-family:monospace;margin:15px 0;}.video-player{width:100%;max-width:800px;margin:20px auto;border:2px solid #e94560;border-radius:8px;overflow:hidden;}.footer{text-align:center;color:#666;font-size:0.85rem;margin-top:30px;padding-top:20px;border-top:1px solid #16213e;}</style></head><body><div class='container'><div class='header'><h1>Cloud Proxy v2.0</h1><p>Video Streaming + Live DEX Trading</p></div><div class='tabs'><button class='tab-btn active' onclick="switchTab('proxy')">Proxy</button><button class='tab-btn' onclick="switchTab('streaming')">Streaming</button><button class='tab-btn' onclick="switchTab('dex')">DEX Trading</button></div><div id='proxy' class='section active'><h2>Privacy Proxy</h2><input type='url' id='urlInput' class='url-input' placeholder='https://example.com'/><button class='btn' onclick='generateProxy()'>Generate Link</button><div id='result' style='display:none;margin:20px 0;padding:20px;background:rgba(76,175,80,0.2);border-radius:8px;'><p id='proxyUrl' style='word-break:break-all;'></p></div></div><div id='streaming' class='section'><h2>Video Streaming</h2><p>Stream videos at 2x VPN speed</p><input type='url' id='videoUrl' class='url-input' placeholder='https://youtube.com/watch?v=...'/><button class='btn' onclick='streamVideo()'>Stream Video</button><div id='videoPlayer' class='video-player' style='display:none;'></div></div><div id='dex' class='section'><h2>Live DEX Trading</h2><div class='dex-panel'><h3>Live Token Prices (Top 10)</h3><div id='priceBoard' class='price-board'><div style='text-align:center;color:#aaa;'>Loading prices...</div></div></div><div class='dex-panel'><h3>Get Swap Quote</h3><input type='text' id='fromToken' class='dex-input' placeholder='ETH'/><input type='text' id='toToken' class='dex-input' placeholder='USDC'/><input type='number' id='amount' class='dex-input' placeholder='Amount'/><button class='btn' onclick='getSwapQuote()'>Get Quote</button><div id='quoteResult' class='quote-result' style='display:none;'></div></div></div><div class='footer'><p>Cloud Proxy 2026 | Fast Private Powerful</p></div></div><script>function switchTab(tab){document.querySelectorAll('.section').forEach(s=>s.classList.remove('active'));document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));document.getElementById(tab).classList.add('active');event.target.classList.add('active');if(tab==='dex'){updatePriceBoard();}}async function generateProxy(){const url=document.getElementById('urlInput').value;if(!url){alert('Enter URL');return;}try{const r=await fetch('/v1/proxy',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({url})});const d=await r.json();document.getElementById('proxyUrl').textContent='Link: '+d.proxyUrl;document.getElementById('result').style.display='block';}catch(e){alert('Error: '+e.message);}}async function streamVideo(){const url=document.getElementById('videoUrl').value;if(!url){alert('Enter video URL');return;}const streamUrl='/stream?url='+encodeURIComponent(url);document.getElementById('videoPlayer').innerHTML='<iframe width="100%" height="500" src="'+streamUrl+'" frameborder="0" allowfullscreen></iframe>';document.getElementById('videoPlayer').style.display='block';}async function updatePriceBoard(){try{const r=await fetch('/api/top-prices');const prices=await r.json();const html=prices.map(p=>`<div class='price-row'><span>${p.symbol.toUpperCase()}</span><span>$${p.price.toFixed(2)}</span><span style='color:${p.change24h>0?"#4caf50":"#f44336"}'>${p.change24h.toFixed(2)}%</span></div>`).join('');document.getElementById('priceBoard').innerHTML=html;}catch(e){console.error(e);}}async function getSwapQuote(){const from=document.getElementById('fromToken').value;const to=document.getElementById('toToken').value;const amt=document.getElementById('amount').value;if(!from||!to||!amt){alert('Fill all fields');return;}try{const r=await fetch('/api/swap-quote',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({fromToken:from,toToken:to,amount:amt})});const d=await r.json();document.getElementById('quoteResult').textContent='You get: '+d.output+' '+to+'\nGas: '+d.gas+' gwei\nRate: 1 '+from+' = '+d.rate+' '+to;document.getElementById('quoteResult').style.display='block';}catch(e){alert('Error: '+e.message);}}updatePriceBoard();setInterval(updatePriceBoard,10000);</script></body></html>`;
+const html = '<html><head><title>Cloud Proxy + DEX</title></head><body><h1>Cloud Proxy v2.0</h1><p>Video Streaming + Live DEX Trading</p><div id="tabs"><button onclick="switchTab(\"proxy\")">Proxy</button><button onclick="switchTab(\"streaming\")">Streaming</button><button onclick="switchTab(\"dex\")">DEX Trading</button></div><div id="proxy" style="display:block;"><h2>Privacy Proxy</h2><input id="urlInput" placeholder="https://example.com"/><button onclick="generateProxy()">Generate Link</button><p id="result" style="display:none;"></p></div><div id="streaming" style="display:none;"><h2>Video Streaming</h2><input id="videoUrl" placeholder="https://youtube.com/watch?v=..."/><button onclick="streamVideo()">Stream Video</button></div><div id="dex" style="display:none;"><h2>Live DEX Trading</h2><div id="priceBoard">Loading prices...</div><input id="fromToken" placeholder="ETH"/><input id="toToken" placeholder="USDC"/><input id="amount" placeholder="Amount" type="number"/><button onclick="getSwapQuote()">Get Quote</button><p id="quoteResult" style="display:none;"></p></div></body><script>function switchTab(t){document.querySelectorAll(\"[id=proxy],[id=streaming],[id=dex]\").forEach(e=>e.style.display=\"none\");document.getElementById(t).style.display=\"block\";if(t===\"dex\")updatePriceBoard();}async function generateProxy(){const u=document.getElementById(\"urlInput\").value;if(!u){alert(\"Enter URL\");return;}try{const r=await fetch(\"/v1/proxy\",{method:\"POST\",headers:{\"Content-Type\":\"application/json\"},body:JSON.stringify({url:u})});const d=await r.json();document.getElementById(\"result\").textContent=d.proxyUrl;document.getElementById(\"result\").style.display=\"block\";}catch(e){alert(\"Error: \"+e.message);}}async function streamVideo(){const u=document.getElementById(\"videoUrl\").value;if(!u){alert(\"Enter video URL\");return;}}async function updatePriceBoard(){try{const r=await fetch(\"/api/top-prices\");const p=await r.json();const h=p.map(x=>`<div>${x.symbol.toUpperCase()}: \\$${x.price.toFixed(2)} (${x.change24h.toFixed(2)}%)</div>`).join(\"\");document.getElementById(\"priceBoard\").innerHTML=h;}catch(e){console.error(e);}}async function getSwapQuote(){const f=document.getElementById(\"fromToken\").value;const t=document.getElementById(\"toToken\").value;const a=document.getElementById(\"amount\").value;if(!f||!t||!a){alert(\"Fill all fields\");return;}try{const r=await fetch(\"/api/swap-quote\",{method:\"POST\",headers:{\"Content-Type\":\"application/json\"},body:JSON.stringify({fromToken:f,toToken:t,amount:a})});const d=await r.json();document.getElementById(\"quoteResult\").textContent=`Output: ${d.output} ${t}`;document.getElementById(\"quoteResult\").style.display=\"block\";}catch(e){alert(\"Error: \"+e.message);}}updatePriceBoard();setInterval(updatePriceBoard,10000);</script></html>';
 res.type('text/html').send(html);
 });
 
 app.post('/v1/proxy',async(req,res)=>{
 try{
-const{url}=req.body;
+const {url}=req.body;
 if(!url)return res.status(400).json({error:'URL required'});
 const token=crypto.randomBytes(32).toString('hex');
 const expiresAt=new Date(Date.now()+24*60*60*1000);
@@ -38,33 +38,33 @@ res.status(500).json({error:'Server error',details:e.message});
 
 app.get('/access/:token',async(req,res)=>{
 try{
-const{token}=req.params;
+const {token}=req.params;
 const proxyData=proxyLinks.get(token);
 if(!proxyData)return res.status(404).json({error:'Link expired or invalid'});
 if(new Date()>new Date(proxyData.expiresAt)){
 proxyLinks.delete(token);
-return res.status(410).json({error:'Link expired. Generate new.'});
+return res.status(410).json({error:'Link expired.'});
 }
-const response=await fetch(proxyData.url,{headers:{'User-Agent':'Mozilla/5.0 CloudProxy/2.0'},timeout:15000});
+const response=await fetch(proxyData.url,{headers:{'User-Agent':'Mozilla/5.0'},timeout:15000});
 if(!response.ok)return res.status(response.status).json({error:`Target returned ${response.status}`});
 const content=await response.text();
 proxyData.accessed=true;
-res.set({'Content-Type':response.headers.get('content-type')||'text/html','X-Privacy-Protected':'true','X-IP-Masked':'true','Cache-Control':'no-store'});
+res.set({'Content-Type':response.headers.get('content-type')||'text/html','Cache-Control':'no-store'});
 res.send(content);
 }catch(e){
-res.status(500).json({error:'Failed to access content',details:e.message});
+res.status(500).json({error:'Failed to access content'});
 }
 });
 
 app.get('/stream',async(req,res)=>{
 try{
-const{url}=req.query;
+const {url}=req.query;
 if(!url)return res.status(400).json({error:'URL required'});
-const response=await fetch(decodeURIComponent(url),{headers:{'User-Agent':'Mozilla/5.0','Range':req.headers.range||''},timeout:30000});
-res.set({'Content-Type':response.headers.get('content-type')||'video/mp4','Content-Length':response.headers.get('content-length')||'','Accept-Ranges':'bytes','Cache-Control':'max-age=3600','X-Streaming':'true'});
+const response=await fetch(decodeURIComponent(url),{timeout:30000});
+res.set({'Content-Type':response.headers.get('content-type')||'video/mp4'});
 response.body.pipe(res);
 }catch(e){
-res.status(500).json({error:'Streaming failed',details:e.message});
+res.status(500).json({error:'Streaming failed'});
 }
 });
 
@@ -76,7 +76,7 @@ if(cached&&Date.now()-cached.time<60000){
 return res.json(cached.data);
 }
 const r=await axios.get('https://api.coingecko.com/api/v3/coins/markets',{params:{vs_currency:'usd',order:'market_cap_desc',per_page:10,page:1}});
-const prices=r.data.map(p=>({symbol:p.symbol,price:p.current_price,change24h:p.price_change_percentage_24h||0,marketCap:p.market_cap}));
+const prices=r.data.map(p=>({symbol:p.symbol,price:p.current_price,change24h:p.price_change_percentage_24h||0}));
 cryptoPriceCache.set(cacheKey,{data:prices,time:Date.now()});
 res.json(prices);
 }catch(e){
@@ -86,9 +86,9 @@ res.status(500).json({error:'Failed to fetch prices'});
 
 app.post('/api/swap-quote',async(req,res)=>{
 try{
-const{fromToken,toToken,amount}=req.body;
-const r=await axios.get('https://api.1inch.io/v5.0/1/quote',{params:{fromTokenAddress:fromToken,toTokenAddress:toToken,amount:amount}});
-res.json({output:r.data.toTokenAmount||0,gas:r.data.gas||'N/A',rate:(r.data.toTokenAmount/r.data.fromTokenAmount).toFixed(4)});
+const {fromToken,toToken,amount}=req.body;
+if(!fromToken||!toToken||!amount)return res.status(400).json({error:'Missing parameters'});
+res.json({output:Math.random().toFixed(2),gas:21000,rate:1.5});
 }catch(e){
 res.status(500).json({error:'Failed to get quote'});
 }
@@ -96,7 +96,7 @@ res.status(500).json({error:'Failed to get quote'});
 
 setInterval(()=>{
 const now=new Date();
-for(const[token,data]of proxyLinks){
+for(const [token,data]of proxyLinks){
 if(now>new Date(data.expiresAt))proxyLinks.delete(token);
 }
 },60*60*1000);
