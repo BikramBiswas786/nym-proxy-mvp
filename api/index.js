@@ -19,7 +19,7 @@ app.get('/v1/status',(req,res)=>{
 });
 
 app.get('/v1/proxy',(req,res)=>{
-const html = '<html><head><title>Cloud Proxy + DEX</title></head><body><h1>Cloud Proxy v2.0</h1><p>Video Streaming + Live DEX Trading</p><div id="tabs"><button onclick="switchTab(\"proxy\")">Proxy</button><button onclick="switchTab(\"streaming\")">Streaming</button><button onclick="switchTab(\"dex\")">DEX Trading</button></div><div id="proxy" style="display:block;"><h2>Privacy Proxy</h2><input id="urlInput" placeholder="https://example.com"/><button onclick="generateProxy()">Generate Link</button><p id="result" style="display:none;"></p></div><div id="streaming" style="display:none;"><h2>Video Streaming</h2><input id="videoUrl" placeholder="https://youtube.com/watch?v=..."/><button onclick="streamVideo()">Stream Video</button></div><div id="dex" style="display:none;"><h2>Live DEX Trading</h2><div id="priceBoard">Loading prices...</div><input id="fromToken" placeholder="ETH"/><input id="toToken" placeholder="USDC"/><input id="amount" placeholder="Amount" type="number"/><button onclick="getSwapQuote()">Get Quote</button><p id="quoteResult" style="display:none;"></p></div></body><script>function switchTab(t){document.querySelectorAll(\"[id=proxy],[id=streaming],[id=dex]\").forEach(e=>e.style.display=\"none\");document.getElementById(t).style.display=\"block\";if(t===\"dex\")updatePriceBoard();}async function generateProxy(){const u=document.getElementById(\"urlInput\").value;if(!u){alert(\"Enter URL\");return;}try{const r=await fetch(\"/v1/proxy\",{method:\"POST\",headers:{\"Content-Type\":\"application/json\"},body:JSON.stringify({url:u})});const d=await r.json();document.getElementById(\"result\").textContent=d.proxyUrl;document.getElementById(\"result\").style.display=\"block\";}catch(e){alert(\"Error: \"+e.message);}}async function streamVideo(){const u=document.getElementById(\"videoUrl\").value;if(!u){alert(\"Enter video URL\");return;}}async function updatePriceBoard(){try{const r=await fetch(\"/api/top-prices\");const p=await r.json();const h=p.map(x=>`<div>${x.symbol.toUpperCase()}: \\$${x.price.toFixed(2)} (${x.change24h.toFixed(2)}%)</div>`).join(\"\");document.getElementById(\"priceBoard\").innerHTML=h;}catch(e){console.error(e);}}async function getSwapQuote(){const f=document.getElementById(\"fromToken\").value;const t=document.getElementById(\"toToken\").value;const a=document.getElementById(\"amount\").value;if(!f||!t||!a){alert(\"Fill all fields\");return;}try{const r=await fetch(\"/api/swap-quote\",{method:\"POST\",headers:{\"Content-Type\":\"application/json\"},body:JSON.stringify({fromToken:f,toToken:t,amount:a})});const d=await r.json();document.getElementById(\"quoteResult\").textContent=`Output: ${d.output} ${t}`;document.getElementById(\"quoteResult\").style.display=\"block\";}catch(e){alert(\"Error: \"+e.message);}}updatePriceBoard();setInterval(updatePriceBoard,10000);</script></html>';
+const html='<html><head><title>Cloud Proxy + DEX</title><style>body{font-family:Arial;background:#1a1a2e;color:#fff;padding:20px;}h1{color:#ff6b6b;}.container{max-width:900px;margin:0 auto;}.tabs{display:flex;gap:10px;margin:20px 0;}.tab{padding:10px 20px;background:#e94560;border:none;color:white;cursor:pointer;}.tab.active{background:#ff6b6b;}.section{display:none;margin:20px 0;padding:20px;background:#16213e;border-radius:8px;}.section.active{display:block;}.input-group{display:flex;gap:10px;margin:15px 0;}.input-group input{flex:1;padding:10px;border:none;border-radius:5px;}.input-group button{padding:10px 20px;background:#ff6b6b;border:none;color:white;cursor:pointer;border-radius:5px;}.result{background:#0f3460;padding:15px;margin:15px 0;border-radius:5px;word-break:break-all;}.btn-group{display:flex;gap:10px;margin:15px 0;}.btn-action{flex:1;padding:10px;background:#4caf50;border:none;color:white;cursor:pointer;border-radius:5px;}</style></head><body><div class="container"><h1>Cloud Proxy v2.0</h1><div class="tabs"><button class="tab active" onclick="showTab(0)">Proxy</button><button class="tab" onclick="showTab(1)">Streaming</button><button class="tab" onclick="showTab(2)">DEX Trading</button></div><div class="section active"><h2>Privacy Proxy</h2><div class="input-group"><input id="url" placeholder="https://example.com" type="url"/><button onclick="generateProxy()">Generate Link</button></div><div id="result"></div><div id="buttons" class="btn-group" style="display:none;"><button class="btn-action" onclick="openLink()">Open Link</button><button class="btn-action" onclick="copyLink()">Copy Link</button></div></div><div class="section"><h2>Video Streaming</h2><input id="videoUrl" placeholder="https://youtube.com/watch?v=..." type="url"/><button onclick="streamVideo()">Stream Video</button></div><div class="section"><h2>Live DEX Trading</h2><div id="prices">Loading prices...</div><div style="margin:20px 0;"><input id="from" placeholder="ETH"/><input id="to" placeholder="USDC"/><input id="amt" placeholder="Amount" type="number"/><button onclick="getQuote()">Get Quote</button></div><div id="quote"></div></div></div><script>let proxyUrl="";function showTab(n){const secs=document.querySelectorAll(".section");const tabs=document.querySelectorAll(".tab");secs.forEach(s=>s.classList.remove("active"));tabs.forEach(t=>t.classList.remove("active"));secs[n].classList.add("active");tabs[n].classList.add("active");if(n===2)loadPrices();}async function generateProxy(){const url=document.getElementById("url").value;if(!url){alert("Enter URL");return;}try{const r=await fetch("/v1/proxy",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({url})});const d=await r.json();proxyUrl=d.proxyUrl;document.getElementById("result").innerHTML="<strong>Proxy Link:</strong><div class=\"result\">" + d.proxyUrl + "</div>";document.getElementById("buttons").style.display="flex";}catch(e){alert("Error: "+e.message);}}function openLink(){if(proxyUrl)window.open(proxyUrl,"_blank");}function copyLink(){if(proxyUrl)navigator.clipboard.writeText(proxyUrl);}async function streamVideo(){}async function loadPrices(){try{const r=await fetch("/api/top-prices");const p=await r.json();let html="";p.slice(0,10).forEach(x=>{html+="<div>" + x.symbol.toUpperCase() + ": \\$" + x.price.toFixed(2) + " (" + x.change24h.toFixed(2) + "%)</div>";});document.getElementById("prices").innerHTML=html;}catch(e){console.error(e);}}async function getQuote(){const f=document.getElementById("from").value;const t=document.getElementById("to").value;const a=document.getElementById("amt").value;if(!f||!t||!a){alert("Fill all fields");return;}document.getElementById("quote").innerHTML="Output: " + a + " " + t;}loadPrices();setInterval(loadPrices,60000);</script></body></html>';
 res.type('text/html').send(html);
 });
 
@@ -30,7 +30,8 @@ if(!url)return res.status(400).json({error:'URL required'});
 const token=crypto.randomBytes(32).toString('hex');
 const expiresAt=new Date(Date.now()+24*60*60*1000);
 proxyLinks.set(token,{url,createdAt:new Date(),expiresAt,accessed:false});
-res.json({success:true,originalUrl:url,proxyUrl:`https://nym-proxy-backend.vercel.app/access/${token}`,expiresAt:expiresAt.toISOString(),expiresIn:'24 hours'});
+const proxyUrl=`https://${req.get('host')}/access/${token}`;
+res.json({success:true,originalUrl:url,proxyUrl:proxyUrl,expiresAt:expiresAt.toISOString(),expiresIn:'24 hours'});
 }catch(e){
 res.status(500).json({error:'Server error',details:e.message});
 }
@@ -43,16 +44,18 @@ const proxyData=proxyLinks.get(token);
 if(!proxyData)return res.status(404).json({error:'Link expired or invalid'});
 if(new Date()>new Date(proxyData.expiresAt)){
 proxyLinks.delete(token);
-return res.status(410).json({error:'Link expired.'});
+return res.status(410).json({error:'Link expired. Generate new.'});
 }
-const response=await fetch(proxyData.url,{headers:{'User-Agent':'Mozilla/5.0'},timeout:15000});
-if(!response.ok)return res.status(response.status).json({error:`Target returned ${response.status}`});
-const content=await response.text();
+try {
+const response=await axios.get(proxyData.url,{timeout:15000,headers:{'User-Agent':'Mozilla/5.0'}});
 proxyData.accessed=true;
-res.set({'Content-Type':response.headers.get('content-type')||'text/html','Cache-Control':'no-store'});
-res.send(content);
+res.set({'Content-Type':response.headers['content-type']||'text/html','Cache-Control':'no-store'});
+res.send(response.data);
+} catch(fetchError) {
+res.status(502).json({error:'Failed to access target',details:fetchError.message});
+}
 }catch(e){
-res.status(500).json({error:'Failed to access content'});
+res.status(500).json({error:'Proxy error'});
 }
 });
 
@@ -60,9 +63,9 @@ app.get('/stream',async(req,res)=>{
 try{
 const {url}=req.query;
 if(!url)return res.status(400).json({error:'URL required'});
-const response=await fetch(decodeURIComponent(url),{timeout:30000});
-res.set({'Content-Type':response.headers.get('content-type')||'video/mp4'});
-response.body.pipe(res);
+const response=await axios.get(decodeURIComponent(url),{timeout:30000,responseType:'stream'});
+res.set({'Content-Type':response.headers['content-type']||'video/mp4'});
+response.data.pipe(res);
 }catch(e){
 res.status(500).json({error:'Streaming failed'});
 }
@@ -75,7 +78,7 @@ const cached=cryptoPriceCache.get(cacheKey);
 if(cached&&Date.now()-cached.time<60000){
 return res.json(cached.data);
 }
-const r=await axios.get('https://api.coingecko.com/api/v3/coins/markets',{params:{vs_currency:'usd',order:'market_cap_desc',per_page:10,page:1}});
+const r=await axios.get('https://api.coingecko.com/api/v3/coins/markets',{params:{vs_currency:'usd',order:'market_cap_desc',per_page:10,page:1},timeout:10000});
 const prices=r.data.map(p=>({symbol:p.symbol,price:p.current_price,change24h:p.price_change_percentage_24h||0}));
 cryptoPriceCache.set(cacheKey,{data:prices,time:Date.now()});
 res.json(prices);
