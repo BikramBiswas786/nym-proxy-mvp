@@ -34,12 +34,16 @@ function createToken(url) {
   const payload = Buffer.from(url).toString('base64');
   const hmac = crypto.createHmac('sha256', SECRET_KEY);
   const signature = hmac.update(payload).digest('hex');
-  return `${payload}.${signature}`;
+  return encodeURIComponent(`${payload}.${signature}`);
 }
 
-function verifyToken(token) {
+function verifyToken(encodedToken) {
   try {
-    const [payload, signature] = token.split('.');
+    const token = decodeURIComponent(encodedToken);
+    const lastDot = token.lastIndexOf('.');
+    if (lastDot === -1) return null;
+    const payload = token.substring(0, lastDot);
+    const signature = token.substring(lastDot + 1);
     const hmac = crypto.createHmac('sha256', SECRET_KEY);
     const expectedSignature = hmac.update(payload).digest('hex');
     if (signature === expectedSignature) {
