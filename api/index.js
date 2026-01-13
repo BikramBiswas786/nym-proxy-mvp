@@ -5,6 +5,7 @@ import crypto from 'crypto';
 
 const app = express();
 app.use(express.json());
+
 app.use((req, res, next) => {
   res.header('Access-Control-Allow-Origin', '*');
   if (req.method === 'OPTIONS') return res.sendStatus(200);
@@ -41,11 +42,31 @@ app.get('/proxy/:token(*)', async (req, res) => {
   try {
     const url = decodeUrl(req.params.token);
     try { new URL(url); } catch { return res.status(400).json({error: 'Bad URL'}); }
-    const r = await axios.get(url, {timeout: 60000, maxRedirects: 5, responseType: 'arraybuffer'});
+    
+    const axiosConfig = {
+      timeout: 60000,
+      maxRedirects: 5,
+      responseType: 'arraybuffer',
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        'Accept': '*/*',
+        'Accept-Language': 'en-US,en;q=0.9',
+        'Accept-Encoding': 'gzip, deflate, br',
+        'DNT': '1'
+      }
+    };
+    
+    const r = await axios.get(url, axiosConfig);
     res.set('Content-Type', r.headers['content-type'] || 'text/html');
     res.status(200).send(r.data);
   } catch (e) {
-    return res.status(502).json({error: 'Fetch failed'});
+    const errorMsg = e.code || e.message || 'Unknown error';
+    const statusCode = e.response?.status || 502;
+    return res.status(statusCode).json({
+      error: 'Fetch failed',
+      details: errorMsg,
+      type: e.code
+    });
   }
 });
 
@@ -53,11 +74,31 @@ app.get('/access/:token(*)', async (req, res) => {
   try {
     const url = decodeUrl(req.params.token);
     try { new URL(url); } catch { return res.status(400).json({error: 'Bad URL'}); }
-    const r = await axios.get(url, {timeout: 60000, maxRedirects: 5, responseType: 'arraybuffer'});
+    
+    const axiosConfig = {
+      timeout: 60000,
+      maxRedirects: 5,
+      responseType: 'arraybuffer',
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        'Accept': '*/*',
+        'Accept-Language': 'en-US,en;q=0.9',
+        'Accept-Encoding': 'gzip, deflate, br',
+        'DNT': '1'
+      }
+    };
+    
+    const r = await axios.get(url, axiosConfig);
     res.set('Content-Type', r.headers['content-type'] || 'text/html');
     res.status(200).send(r.data);
   } catch (e) {
-    return res.status(502).json({error: 'Fetch failed'});
+    const errorMsg = e.code || e.message || 'Unknown error';
+    const statusCode = e.response?.status || 502;
+    return res.status(statusCode).json({
+      error: 'Fetch failed',
+      details: errorMsg,
+      type: e.code
+    });
   }
 });
 
