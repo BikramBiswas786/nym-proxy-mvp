@@ -3,84 +3,60 @@ import axios from 'axios';
 import crypto from 'crypto';
 
 const app = express();
-app.use(express.json({ limit: '50mb' }));
-app.use(express.urlencoded({ limit: '50mb', extended: true }));
+app.use(express.json());
 app.use((req, res, next) => {
   res.header('Access-Control-Allow-Origin', '*');
-  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   if (req.method === 'OPTIONS') return res.sendStatus(200);
   next();
 });
 
-app.get('/v1/health', (req, res) => res.json({ status: 'healthy' }));
-
-app.get('/v1/status', (req, res) => res.json({
-  service: 'Cloud Proxy',
-  version: '2.1',
-  features: { openLink: true, copyLink: true, caching: true, timeout: '60s' }
-}));
-
-function fromUrlSafeBase64(str) {
-  str = str.replace(/-/g, '+').replace(/_/g, '/');
-  const padding = str.length % 4;
-  if (padding) str += '='.repeat(4 - padding);
-  return Buffer.from(str, 'base64').toString('utf8');
-}
-
-const HTML = '<html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width"><title>Cloud Proxy v2.1</title><style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:system-ui;background:#0f0f0f;color:#fff;display:flex;align-items:center;justify-content:center;min-height:100vh;padding:20px}form{width:100%;max-width:500px;background:#1a1a1a;padding:40px;border-radius:12px;box-shadow:0 8px 32px rgba(0,0,0,0.3);border:1px solid #333}h1{margin-bottom:30px;font-size:28px;text-align:center;background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}label{display:block;margin-bottom:8px;font-weight:600;color:#aaa;font-size:14px}.input-group{margin-bottom:20px}input{width:100%;padding:12px;border:1px solid #444;background:#0f0f0f;color:#fff;border-radius:8px;font-size:14px;transition:all 0.3s}input:focus{outline:none;border-color:#667eea;box-shadow:0 0 0 3px rgba(102,126,234,0.1)}button{width:100%;padding:12px;background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);color:white;border:none;border-radius:8px;font-size:16px;font-weight:600;cursor:pointer;transition:all 0.3s}button:hover{transform:translateY(-2px);box-shadow:0 8px 16px rgba(102,126,234,0.4)}.info{margin-top:20px;padding:15px;background:#1a1a1a;border-left:3px solid #667eea;border-radius:4px;font-size:12px;color:#999}.error{color:#ff6b6b;margin-top:10px;padding:10px;background:#1a1a1a;border-radius:4px;display:none}.success{color:#51cf66;margin-top:10px;padding:10px;background:#1a1a1a;border-radius:4px;display:none}#result{margin-top:20px;padding:15px;background:#1a1a1a;border-radius:8px;display:none;word-break:break-all}#result a{color:#667eea;text-decoration:none}#result a:hover{text-decoration:underline}</style></head><body><form id="form"><h1>Cloud Proxy</h1><div class="input-group"><label>URL to Proxy</label><input type="url" id="url" placeholder="https://example.com" required></div><button type="submit">Generate Proxy Link</button><div id="result"></div><div class="error" id="error"></div><div class="success" id="success"></div><div class="info">Enter any website URL to generate a secure proxy link.</div></form><script>document.getElementById("form").addEventListener("submit",function(e){e.preventDefault();var url=document.getElementById("url").value;var errorEl=document.getElementById("error");var successEl=document.getElementById("success");var resultEl=document.getElementById("result");errorEl.style.display="none";successEl.style.display="none";resultEl.style.display="none";fetch("/v1/proxy",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({url:url})}).then(function(res){return res.json()}).then(function(data){if(!data.token){errorEl.textContent="Error: "+( data.error||"Failed to generate");errorEl.style.display="block";return}var proxyUrl=window.location.origin+"/proxy/"+data.token;resultEl.innerHTML="<strong>Generated!</strong><br><a href=\""+proxyUrl+"\" target=\"_blank\">"+proxyUrl+"</a>";resultEl.style.display="block";successEl.textContent="Success!";successEl.style.display="block"})})</script></body></html>';
+app.get('/v1/health', (req, res) => res.json({status: 'healthy'}));
+app.get('/v1/status', (req, res) => res.json({service: 'Cloud Proxy v2.1', timeout: '60s'}));
 
 app.get('/v1/proxy', (req, res) => {
-  res.type('text/html').send(HTML);
+  res.json({message: 'POST /v1/proxy with {url} to generate token'});
 });
 
 app.post('/v1/proxy', (req, res) => {
   try {
-    const { url } = req.body || {};
-    if (!url) return res.status(400).json({ error: 'URL required' });
-    try { new URL(url); } catch (e) { return res.status(400).json({ error: 'Invalid URL' }); }
-    const token = crypto.randomBytes(16).toString('base64url');
-    return res.status(200).json({ success: true, token: token });
+    const {url} = req.body || {};
+    if (!url) return res.status(400).json({error: 'URL required'});
+    try { new URL(url); } catch (e) { return res.status(400).json({error: 'Invalid URL'}); }
+    const token = crypto.randomBytes(12).toString('base64url');
+    return res.json({success: true, token: token});
   } catch (e) {
-    return res.status(500).json({ error: e.message });
+    return res.status(500).json({error: e.message});
   }
 });
 
-app.get('/proxy/:encodedurl(*)', async (req, res) => {
+function decodeUrl(str) {
+  str = str.replace(/-/g, '+').replace(/_/g, '/');
+  const p = str.length % 4;
+  if (p) str += '='.repeat(4 - p);
+  return Buffer.from(str, 'base64').toString();
+}
+
+app.get('/proxy/:token(*)', async (req, res) => {
   try {
-    const encodedurl = req.params.encodedurl;
-    let url;
-    try {
-      url = fromUrlSafeBase64(encodedurl);
-    } catch (e) {
-      return res.status(400).json({ error: 'Invalid encoding' });
-    }
-    try { new URL(url); } catch (e) { return res.status(400).json({ error: 'Invalid URL' }); }
-    const response = await axios.get(url, { timeout: 60000, maxRedirects: 5, headers: { 'User-Agent': 'Mozilla/5.0' }, responseType: 'arraybuffer' });
-    res.set('Content-Type', response.headers['content-type'] || 'text/html');
-    res.set('Cache-Control', 'public, max-age=3600');
-    res.status(200).send(response.data);
+    const url = decodeUrl(req.params.token);
+    try { new URL(url); } catch { return res.status(400).json({error: 'Bad URL'}); }
+    const r = await axios.get(url, {timeout: 60000, maxRedirects: 5, responseType: 'arraybuffer'});
+    res.set('Content-Type', r.headers['content-type'] || 'text/html');
+    res.status(200).send(r.data);
   } catch (e) {
-    return res.status(502).json({ error: 'Fetch failed: ' + (e.message || 'error') });
+    return res.status(502).json({error: 'Fetch failed'});
   }
 });
 
 app.get('/access/:token(*)', async (req, res) => {
   try {
-    const token = req.params.token;
-    let url;
-    try {
-      url = fromUrlSafeBase64(token);
-    } catch (e) {
-      return res.status(400).json({ error: 'Invalid token' });
-    }
-    try { new URL(url); } catch (e) { return res.status(400).json({ error: 'Invalid URL' }); }
-    const response = await axios.get(url, { timeout: 60000, maxRedirects: 5, headers: { 'User-Agent': 'Mozilla/5.0' }, responseType: 'arraybuffer' });
-    res.set('Content-Type', response.headers['content-type'] || 'text/html');
-    res.set('Cache-Control', 'public, max-age=3600');
-    res.status(200).send(response.data);
+    const url = decodeUrl(req.params.token);
+    try { new URL(url); } catch { return res.status(400).json({error: 'Bad URL'}); }
+    const r = await axios.get(url, {timeout: 60000, maxRedirects: 5, responseType: 'arraybuffer'});
+    res.set('Content-Type', r.headers['content-type'] || 'text/html');
+    res.status(200).send(r.data);
   } catch (e) {
-    return res.status(502).json({ error: 'Fetch failed: ' + (e.message || 'error') });
+    return res.status(502).json({error: 'Fetch failed'});
   }
 });
 
