@@ -48,6 +48,16 @@
         "default": 120000,
         "minimum": 5000,
         "maximum": 300000
+            },
+    "proxyCountries": {
+      "title": "Proxy Countries",
+      "type": "array",
+      "description": "Countries to use for proxy (ICELAND, DENMARK, etc.)",
+      "editor": "select",
+      "default": ["ICELAND", "DENMARK"],
+      "enum": ["ICELAND", "DENMARK"],
+      "isRequired": false
+    
       }
     },
     "required": ["url"]
